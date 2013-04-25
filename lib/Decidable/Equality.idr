@@ -2,6 +2,8 @@ module Decidable.Equality
 
 import Builtins
 
+%access public
+
 --------------------------------------------------------------------------------
 -- Utility lemmas
 --------------------------------------------------------------------------------
@@ -99,4 +101,36 @@ instance DecEq (Fin n) where
     | Yes p = Yes $ cong p
     | No p = No $ \h => p $ fSinjective {f = f} {f' = f'} h
 
+
+--------------------------------------------------------------------------------
+-- String
+--------------------------------------------------------------------------------
+
+ -- necessary because strings are primitives
+stringEquality : (s1, s2 : String) -> (s1 == s2) = True -> s1 = s2
+stringEquality s1 s2 = believe_me
+
+stringInequality : (s1, s2 : String) -> ((s1 == s2) = True -> _|_) -> s1 = s2 -> _|_
+stringInequality s1 s2 = believe_me
+
+instance DecEq String where
+  decEq s1 s2 with (decEq (s1 == s2) True)
+    | Yes p = Yes (stringEquality s1 s2 ?decStringEq_lemma_yes)
+    | No p = No (stringInequality s1 s2 ?decStringEq_lemma_no)
+
+
+
+
+---------- Proofs ----------
+
+Decidable.Equality.decStringEq_lemma_no = proof {
+  intros;
+  refine p;
+  trivial;
+}
+
+Decidable.Equality.decStringEq_lemma_yes = proof {
+  intros;
+  exact p;
+}
 
