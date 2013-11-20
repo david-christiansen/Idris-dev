@@ -593,7 +593,7 @@ TypeExpr ::= ConstraintList? Expr;
 typeExpr :: SyntaxInfo -> IdrisParser PTerm
 typeExpr syn = do cs <- if implicitAllowed syn then constraintList syn else return []
                   sc <- expr syn
-                  return (bindList (PPi constraint) (map (\x -> (MN 0 "c", x)) cs) sc)
+                  return (bindList (PPi constraint) (map nameConstraint cs) sc)
                <?> "type signature"
 
 {- |Parses a lambda expression
@@ -738,15 +738,19 @@ ConstraintList ::=
   | Expr              '=>'
   ;
 -}
-constraintList :: SyntaxInfo -> IdrisParser [PTerm]
+constraintList :: SyntaxInfo -> IdrisParser [(Maybe Name, PTerm)]
 constraintList syn = try (do lchar '('
-                             tys <- sepBy1 (expr' (disallowImp syn)) (lchar ',')
+                             let constraint =
+                                     do n <- optional (do {n <- name; lchar ':'; return n})
+                                        cls <- (expr' (disallowImp syn))
+                                        return (n, cls)
+                             tys <- sepBy1 constraint (lchar ',')
                              lchar ')'
                              reservedOp "=>"
                              return tys)
                  <|> try (do t <- expr (disallowImp syn)
                              reservedOp "=>"
-                             return [t])
+                             return [(Nothing, t)])
                  <|> return []
                  <?> "type constraint list"
 

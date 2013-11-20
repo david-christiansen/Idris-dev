@@ -1237,7 +1237,7 @@ elabClause info opts (_, PWith fc fname lhs_in withs wval_in withblock)
 data MArgTy = IA | EA | CA deriving Show
 
 elabClass :: ElabInfo -> SyntaxInfo -> String ->
-             FC -> [PTerm] ->
+             FC -> [(Name, PTerm)] ->
              Name -> [(Name, PTerm)] -> [PDecl] -> Idris ()
 elabClass info syn doc fc constraints tn ps ds
     = do let cn = UN ("instance" ++ show tn) -- MN 0 ("instance" ++ show tn)
@@ -1272,7 +1272,7 @@ elabClass info syn doc fc constraints tn ps ds
          logLvl 5 $ "Building functions"
          let usyn = syn { using = map (\ (x,y) -> UImplicit x y) ps
                                       ++ using syn }
-         fns <- mapM (cfun cn constraint usyn (map fst imethods)) constraints
+         fns <- mapM (cfun cn constraint usyn (map fst imethods)) (map snd constraints)
          mapM_ (elabDecl EAll info) (concat fns)
          -- for each method, build a top level function
          fns <- mapM (tfun cn constraint usyn (map fst imethods)) imethods
@@ -1292,7 +1292,8 @@ elabClass info syn doc fc constraints tn ps ds
 
     impbind [] x = x
     impbind ((n, ty): ns) x = PPi impl n ty (impbind ns x)
-    conbind (ty : ns) x = PPi constraint (MN 0 "class") ty (conbind ns x)
+
+    conbind ((n, ty) : ns) x = PPi constraint n ty (conbind ns x)
     conbind [] x = x
 
     getMName (PTy _ _ _ _ n _) = nsroot n
@@ -1394,7 +1395,7 @@ elabClass info syn doc fc constraints tn ps ds
     toExp ns e sc = sc
 
 elabInstance :: ElabInfo -> SyntaxInfo ->
-                FC -> [PTerm] -> -- constraints
+                FC -> [(Name, PTerm)] -> -- constraints
                 Name -> -- the class
                 [PTerm] -> -- class parameters (i.e. instance)
                 PTerm -> -- full instance type
@@ -1510,7 +1511,7 @@ elabInstance info syn fc cs n ps t expn ds
 
     mkTyDecl (n, op, t, _) = PTy "" syn fc op n t
 
-    conbind (ty : ns) x = PPi constraint (MN 0 "class") ty (conbind ns x)
+    conbind ((n, ty) : ns) x = PPi constraint n ty (conbind ns x)
     conbind [] x = x
 
     coninsert cs (PPi p@(Imp _ _ _ _) n t sc) = PPi p n t (coninsert cs sc)

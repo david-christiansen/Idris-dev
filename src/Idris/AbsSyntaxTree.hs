@@ -393,13 +393,13 @@ data PDecl' t
    | PNamespace String [PDecl' t] -- ^ New namespace
    | PRecord  String SyntaxInfo FC Name t String Name t  -- ^ Record declaration
    | PClass   String SyntaxInfo FC
-              [t] -- constraints
+              [(Name, t)] -- constraints
               Name
               [(Name, t)] -- parameters
               [PDecl' t] -- declarations
               -- ^ Type class: arguments are documentation, syntax info, source location, constraints,
               -- class name, parameters, method declarations
-   | PInstance SyntaxInfo FC [t] -- constraints
+   | PInstance SyntaxInfo FC [(Name, t)] -- constraints
                              Name -- class
                              [t] -- parameters
                              t -- full instance type
@@ -1159,7 +1159,10 @@ showImp ist impl colour tm = se 10 [] tm where
                     Static -> "[static] "
                     _ -> ""
     se p bnd (PPi (Constraint _ _ _) n ty sc)
-        = bracket p 2 $ se 10 bnd ty ++ " => " ++ se 10 bnd sc
+        | n `elem` allNamesIn sc || impl =
+            bracket p 2 $ "(" ++ perhapsColourise colouriseBound (show n) ++ " : " ++
+                            se 10 bnd ty ++ ") => " ++ se 10 ((n, False):bnd) sc
+        | otherwise = bracket p 2 $ se 10 bnd ty ++ " => " ++ se 10 bnd sc
     se p bnd (PPi (TacImp _ _ s _) n ty sc)
         = bracket p 2 $
           "{tacimp " ++ (perhapsColourise colouriseBound (show n)) ++ " : " ++ se 10 bnd ty ++ "} -> " ++

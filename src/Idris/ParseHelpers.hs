@@ -278,6 +278,12 @@ bindList :: (Name -> PTerm -> PTerm -> PTerm) -> [(Name, PTerm)] -> PTerm -> PTe
 bindList b []          sc = sc
 bindList b ((n, t):bs) sc = b n t (bindList b bs sc)
 
+-- | Invent a name for a constraint if it doesn't have one
+nameConstraint :: (Maybe Name, PTerm) -> (Name, PTerm)
+nameConstraint (Nothing, x) = (MN 0 "c", x)
+nameConstraint (Just n,  x) = (n, x)
+
+
 {- * Layout helpers -}
 
 -- | Push indentation to stack

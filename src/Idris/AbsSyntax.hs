@@ -832,13 +832,13 @@ expandParamsD rhs ist dec ps ns (PMutual f pds)
    = PMutual f (map (expandParamsD rhs ist dec ps ns) pds)
 expandParamsD rhs ist dec ps ns (PClass doc info f cs n params decls)
    = PClass doc info f
-           (map (expandParams dec ps ns []) cs)
+           (map (mapsnd (expandParams dec ps ns [])) cs)
            n
            (map (mapsnd (expandParams dec ps ns [])) params)
            (map (expandParamsD rhs ist dec ps ns) decls)
 expandParamsD rhs ist dec ps ns (PInstance info f cs n params ty cn decls)
    = PInstance info f
-           (map (expandParams dec ps ns []) cs)
+           (map (mapsnd (expandParams dec ps ns [])) cs)
            n
            (map (expandParams dec ps ns []) params)
            (expandParams dec ps ns [] ty)
