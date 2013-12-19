@@ -29,6 +29,7 @@ import Paths_idris
 import Util.System
 import Util.DynamicLinker
 import Util.Net (listenOnLocalhost)
+import Util.Version (gitHash)
 
 import Core.Evaluate
 import Core.Execute (execute)
@@ -1326,7 +1327,7 @@ getColour _ = Nothing
 opt :: (Opt -> Maybe a) -> [Opt] -> [a]
 opt = mapMaybe
 
-ver = showVersion version
+ver = showVersion version ++ gitHash
 
 banner = "     ____    __     _                                          \n" ++
          "    /  _/___/ /____(_)____                                     \n" ++

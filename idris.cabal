@@ -379,6 +379,8 @@ Executable idris
                 , Util.System
                 , Util.DynamicLinker
                 , Util.Net
+                , Util.Version
+                , Util.VersionHelper
 
                 , Pkg.Package
                 , Pkg.PParser
@@ -403,6 +405,7 @@ Executable idris
                 , pretty
                 , process
                 , split
+                , template-haskell
                 , text
                 , time >= 1.4
                 , transformers
