@@ -1,5 +1,10 @@
 language: haskell
+ghc:
+  - 7.6
+  - 7.8
 before_install:
+  - GHC_VERSION=$(ghc --version | cut -d' ' -f 8)
+  - if [[ "$GHC_VERSION" != "7.8.3" && "$TESTS" == "test_liquid" ]]; then exit 0; fi   # LiquidHaskell requires GHC 7.8.3
   - sudo add-apt-repository --yes ppa:h-rayflood/llvm
   - sudo apt-get update -qq
   - sudo apt-get install -qq libgc-dev llvm-3.3
@@ -11,6 +16,12 @@ before_install:
   # test dependency
   - sudo apt-get install -qq expect
   - cabal install alex-3.1.3
+  - if [[ "$GHC_VERSION" = "7.8.3" && "$TESTS" = "test_liquid" ]]; then
+      cabal install liquidhaskell ;
+      curl http://cvc4.cs.nyu.edu/builds/x86_64-linux-opt/cvc4-1.4-x86_64-linux-opt -o $HOME/.cabal/bin/cvc4 ;
+      chmod a+x $HOME/.cabal/bin/cvc4 ;
+      LIQUID="liquid -g -XMultiParamTypeClasses -g -XDeriveFoldable -g -XDeriveTraversable -g -XFunctionalDependencies -g -XFlexibleContexts -g -XFlexibleInstances" ;
+    fi
 install:
   - cabal install -f FFI --enable-tests --dependencies-only
   - ghc-pkg list
@@ -20,11 +31,20 @@ before_script:
   - tar -xf Idris-dev/dist/idris*.tar.gz
   - cd idris*
 script:
+  - if [[ "$TESTS" == "test_liquid" && "$GHC_VERSION" == "7.8.3" ]]; then
+      $LIQUID -isrc --smtsolver=cvc4 src/Idris/Core/TT.hs || exit 1 ;
+      exit 0 ;
+    fi
   - cabal configure -f FFI
   - if [[ "$TESTS" != "doc" ]]; then cabal build; fi
   - if [[ "$TESTS" != "doc" ]]; then cabal copy; fi
   - if [[ "$TESTS" != "doc" ]]; then cabal register; fi
-  - if [[ "$TESTS" == "test_llvm" ]]; then git clone --depth 1 https://github.com/idris-hackers/idris-llvm.git ; cd idris-llvm ; cabal install ; cd .. ; fi
+  - if [[ "$TESTS" == "test_llvm" ]]; then
+      git clone --depth 1 https://github.com/idris-hackers/idris-llvm.git ;
+      cd idris-llvm ;
+      cabal install ;
+      cd .. ;
+    fi
   - make -j2 $TESTS
 env:
   - TESTS="doc"
@@ -32,3 +52,4 @@ env:
   - TESTS="test_c"
   - TESTS="test_llvm"
   - TESTS="test_js"
+  - TESTS="test_liquid"
