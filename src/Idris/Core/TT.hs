@@ -1,5 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, DeriveFunctor #-}
 
+{-@ LIQUID "--no-termination" @-}
 {-| TT is the core language of Idris. The language has:
 
    * Full dependent types
@@ -114,6 +115,7 @@ data ErrorReportPart = TextPart String
                        deriving (Show, Eq)
 
 
+{- data Err' [errSize] -} -- use errSize as standard measure: ENABLE WHEN LIQUID HASKELL SUPPORTS NAMES WITH ' AT THE END (LH issue #273)
 -- Please remember to keep Err synchronised with
 -- Language.Reflection.Errors.Err in the stdlib!
 
@@ -159,6 +161,47 @@ data Err' t
           | ReflectionFailed String (Err' t)
   deriving (Eq, Functor)
 
+{-@
+
+measure
+errSize :: Err -> Int
+errSize (Msg string) = 1
+errSize (InternalMsg string) = 1
+errSize (CantUnify b t1 t2 e ctxt i) = 1 + (errSize e)
+errSize (InfiniteUnify n t ctxt) = 1
+errSize (CantConvert t1 t2 ctxt) = 1
+errSize (CantSolveGoal t ctxt) = 1
+errSize (UnifyScope n n t ctxt) = 1
+errSize (CantInferType str) = 1
+errSize (NonFunctionType t1 t2) = 1
+errSize (NotEquality t1 t2) = 1
+errSize (TooManyArguments n) = 1
+errSize (CantIntroduce t) = 1
+errSize (NoSuchVariable n) = 1
+errSize (NoTypeDecl n) = 1
+errSize (NotInjective t1 t2 t3) = 1
+errSize (CantResolve t) = 1
+errSize (CantResolveAlts ns) = 1
+errSize (IncompleteTerm t) = 1
+errSize (UniverseError) = 1
+errSize (UniqueError u n) = 1
+errSize (UniqueKindError u n) = 1
+errSize (ProgramLineComment) = 1
+errSize (Inaccessible n) = 1
+errSize (NonCollapsiblePostulate n) = 1
+errSize (AlreadyDefined n) = 1
+errSize (ProofSearchFail e) = 1 + (errSize e)
+errSize (NoRewriting t) = 1
+errSize (At fc e) = 1 + (errSize e)
+errSize (Elaborating what n e) = 1 + (errSize e)
+errSize (ElaboratingArg n1 n2 nns e) = 1 + (errSize e)
+errSize (ProviderError msg) = 1
+errSize (LoadingFailed str e) = 1 + (errSize e)
+errSize (ReflectionError parts e) = 1 + (errSize e)
+errSize (ReflectionFailed msg e) = 1 + (errSize e)
+
+@-}
+
 type Err = Err' Term
 
 {-!
@@ -194,6 +237,7 @@ instance Sized Err where
   size (LoadingFailed fn e) = 1 + length fn + size e
   size _ = 1
 
+{-@ score :: e:_ -> _ / [errSize e] @-}
 score :: Err -> Int
 score (CantUnify _ _ _ m _ s) = s + score m
 score (CantResolve _) = 20
@@ -260,9 +304,10 @@ trun fc (Error e) = Error (At fc e)
 discard :: Monad m => m a -> m ()
 discard f = f >> return ()
 
+{-@ showSep :: _ -> xs:_ -> _ / [len xs] @-} -- use xs as reducing param
 showSep :: String -> [String] -> String
-showSep sep [] = ""
-showSep sep [x] = x
+showSep sep []     = ""
+showSep sep [x]    = x
 showSep sep (x:xs) = x ++ sep ++ showSep sep xs
 
 pmap f (x, y) = (f x, f y)
@@ -272,6 +317,7 @@ traceWhen False _  a = a
 
 -- RAW TERMS ----------------------------------------------------------------
 
+{-@ data Name [nameSize] @-}
 -- | Names are hierarchies of strings, describing scope (so no danger of
 -- duplicate names, but need to be careful on lookup).
 data Name = UN T.Text -- ^ User-provided name
@@ -281,6 +327,18 @@ data Name = UN T.Text -- ^ User-provided name
           | SN SpecialName -- ^ Decorated function names
           | SymRef Int -- ^ Reference to IBC file symbol table (used during serialisation)
   deriving (Eq, Ord)
+
+{-@
+measure
+nameSize :: Name -> Int
+nameSize (UN n) = 1
+nameSize (NS n ns) = 1 + (nameSize n)
+nameSize (MN i n) = 1
+nameSize (NErased) = 1
+nameSize (SN sn) = 1 + (specialNameSize sn)
+nameSize (SymRef i) = 1
+@-}
+{-@ invariant {v:Name | nameSize v >= 0}@-}
 
 txt :: String -> T.Text
 txt = T.pack
@@ -309,6 +367,7 @@ deriving instance Binary Name
 deriving instance NFData Name
 !-}
 
+{-@ data SpecialName [specialNameSize] @-}
 data SpecialName = WhereN Int Name Name
                  | WithN Int Name
                  | InstanceN Name [T.Text]
@@ -322,6 +381,20 @@ data SpecialName = WhereN Int Name Name
 deriving instance Binary SpecialName
 deriving instance NFData SpecialName
 !-}
+
+{-@
+measure
+specialNameSize :: SpecialName -> Int
+specialNameSize (WhereN i n1 n2)  = 1 + (nameSize n1) + (nameSize n2)
+specialNameSize (WithN i n)       = 1 + (nameSize n)
+specialNameSize (InstanceN n xs)  = 1 + (nameSize n)
+specialNameSize (ParentN n x)     = 1 + (nameSize n)
+specialNameSize (MethodN n)       = 1 + (nameSize n)
+specialNameSize (CaseN n)         = 1 + (nameSize n)
+specialNameSize (ElimN n)         = 1 + (nameSize n)
+specialNameSize (InstanceCtorN n) = 1 + (nameSize n)
+@-}
+{-@ invariant {sn:SpecialName | specialNameSize sn >= 0} @-}
 
 sInstanceN :: Name -> [String] -> SpecialName
 sInstanceN n ss = InstanceN n (map T.pack ss)
@@ -390,6 +463,7 @@ mapCtxt = fmap . fmap
 
 -- |Return True if the argument 'Name' should be interpreted as the name of a
 -- typeclass.
+tcname :: Name -> Bool
 tcname (UN xs) | T.null xs = False
                | otherwise = T.head xs == '@'
 tcname (NS n _) = tcname n
@@ -398,12 +472,14 @@ tcname (SN (MethodN _)) = True
 tcname (SN (ParentN _ _)) = True
 tcname _ = False
 
+implicitable :: Name -> Bool
 implicitable (NS n _) = implicitable n
 implicitable (UN xs) | T.null xs = False
                      | otherwise = isLower (T.head xs) || T.head xs == '_'
 implicitable (MN _ x) = not (tnull x) && thead x /= '_'
 implicitable _ = False
 
+nsroot :: Name -> Name
 nsroot (NS n _) = n
 nsroot n = n
 
@@ -435,6 +511,7 @@ lookupCtxtName n ctxt = case Map.lookup (nsroot n) ctxt of
                                   Just xs -> filterNS (Map.toList xs)
                                   Nothing -> []
   where
+    {-@ filterNS :: [(Name, a)] -> [(Name, a)] @-}
     filterNS [] = []
     filterNS ((found, v) : xs)
         | nsmatch n found = (found, v) : filterNS xs
@@ -448,7 +525,9 @@ lookupCtxt :: Name -> Ctxt a -> [a]
 lookupCtxt n ctxt = map snd (lookupCtxtName n ctxt)
 
 lookupCtxtExact :: Name -> Ctxt a -> Maybe a
-lookupCtxtExact n ctxt = listToMaybe [ v | (nm, v) <- lookupCtxtName n ctxt, nm == n]
+lookupCtxtExact n ctxt = listToMaybe $ do (nm, v) <- lookupCtxtName n ctxt
+                                          guard (nm == n)
+                                          return v
 
 deleteDefExact :: Name -> Ctxt a -> Ctxt a
 deleteDefExact n = Map.adjust (Map.delete n) (nsroot n)
@@ -610,6 +689,41 @@ instance Show Universe where
     show NullType = "NullType"
     show AllTypes = "Type*"
 
+-- Helper measure for rawSize
+{-@
+measure
+rawBinderSize :: Binder Raw -> Int
+rawBinderSize (Lam ty) = 1 + (rawSize ty)
+rawBinderSize (Pi ty x) = 1 + (rawSize ty)
+rawBinderSize (Let ty val) = 1 + (rawSize ty) + (rawSize val)
+rawBinderSize (NLet ty val) = 1 + (rawSize ty) + (rawSize val)
+rawBinderSize (Hole ty) = 1 + (rawSize ty)
+rawBinderSize (GHole x ty) = 1 + (rawSize ty)
+rawBinderSize (Guess ty val) = 1 + (rawSize ty) + (rawSize val)
+rawBinderSize (PVar ty) = 1 + (rawSize ty)
+rawBinderSize (PVTy ty) = 1 + (rawSize ty)
+@-}
+-- HACK ALERT: assumption that raw terms are never cyclic
+{-@ invariant {v:Binder Raw|rawBinderSize v >= 0} @-}
+
+-- A measure of the size of a raw term, used for the Liquid Haskell termination checker
+{-@
+measure
+rawSize :: Raw -> Int
+rawSize (Var name) = 1
+rawSize (RBind name bind right) = 1 + (rawBinderSize bind) + (rawSize right)
+rawSize (RApp left right) = 1 + (rawSize left) + (rawSize right)
+rawSize (RType) = 1
+rawSize (RUType x) = 1
+rawSize (RForce raw) = 1 + (rawSize raw)
+rawSize (RConstant const) = 1
+@-}
+-- HACK ALERT: assumption that raw terms are never cyclic
+{-@ invariant {v:Raw|rawSize v >= 0} @-}
+
+-- Use rawSize as the standard Liquid Haskell termination metric for Raw
+{-@ data Raw [rawSize] @-}
+
 data Raw = Var Name
          | RBind Name (Binder Raw) Raw
          | RApp Raw Raw
@@ -665,6 +779,33 @@ deriving instance Binary Binder
 deriving instance NFData Binder
 !-}
 
+-- Get Liquid Haskell to understand the action of the binderTy projection WRT termination analysis
+{-@
+measure
+binderTy :: Binder b -> b
+binderTy (Lam t)     = t
+binderTy (Pi t b)    = t
+binderTy (Let t v)   = t
+binderTy (NLet t v)  = t
+binderTy (Hole t)    = t
+binderTy (GHole l t) = t
+binderTy (Guess t g) = t
+binderTy (PVar t)    = t
+binderTy (PVTy t)    = t
+@-}
+{-@
+binderTy :: binder:Binder b -> {v:b|v=binderTy binder}
+@-}
+
+{-@
+mapBindTT :: (x:TT n -> {y:TT n| ttSizeNoAnnots y <= ttSizeNoAnnots x})
+          -> b1:Binder (TT n)
+          -> {b2:Binder (TT n) | ttBinderSizeNoAnnots b2 <= ttBinderSizeNoAnnots b1}
+@-}
+mapBindTT :: (TT n -> TT n) -> Binder (TT n) -> Binder (TT n)
+mapBindTT = undefined
+
+
 instance Sized a => Sized (Binder a) where
   size (Lam ty) = 1 + size ty
   size (Pi ty _) = 1 + size ty
@@ -687,12 +828,14 @@ fmapMB f (GHole i t) = liftM (GHole i) (f t)
 fmapMB f (PVar t)    = liftM PVar (f t)
 fmapMB f (PVTy t)    = liftM PVTy (f t)
 
+{-@ raw_apply :: _ -> args:_ -> _ / [len args] @-}
 raw_apply :: Raw -> [Raw] -> Raw
 raw_apply f [] = f
 raw_apply f (a : as) = raw_apply (RApp f a) as
 
 raw_unapply :: Raw -> (Raw, [Raw])
 raw_unapply t = ua [] t where
+    {-@ ua :: _ -> tm:Raw -> _ / [rawSize tm] @-}
     ua args (RApp f a) = ua (a:args) f
     ua args t          = (t, args)
 
@@ -715,7 +858,7 @@ instance Sized UExp where
 
 instance Binary UExp where
     put x = return ()
-    get = return (UVar (-1))
+    get = return (UVar (-1)) -- FIXME: Why does Liquid Haskell infer "false" as the refinement of get's type?
 
 instance Show UExp where
     show (UVar x) | x < 26 = [toEnum (x + fromEnum 'a')]
@@ -757,6 +900,8 @@ instance Eq NameType where
     TCon _ a == TCon _ b = (a == b) -- ignore tag
     _        == _        = False
 
+-- Use ttSize (defined soon) as the standard Liquid Haskell termination metric for TT
+{-@ data TT [ttSize] @-}
 -- | Terms in the core language. The type parameter is the type of
 -- identifiers used for bindings and explicit named references;
 -- usually we use @TT 'Name'@.
@@ -778,6 +923,110 @@ data TT n = P NameType n (TT n) -- ^ named references with type
 deriving instance Binary TT
 deriving instance NFData TT
 !-}
+
+-- Helper measure for ttSize
+{-@
+measure
+ttBinderSize :: Binder (TT n) -> Int
+ttBinderSize (Lam ty)       = 1 + (ttSize ty)
+ttBinderSize (Pi ty x)      = 1 + (ttSize ty) + (ttSize x)
+ttBinderSize (Let ty val)   = 1 + (ttSize ty) + (ttSize val)
+ttBinderSize (NLet ty val)  = 1 + (ttSize ty) + (ttSize val)
+ttBinderSize (Hole ty)      = 1 + (ttSize ty)
+ttBinderSize (GHole x ty)   = 1 + (ttSize ty)
+ttBinderSize (Guess ty val) = 1 + (ttSize ty) + (ttSize val)
+ttBinderSize (PVar ty)      = 1 + (ttSize ty)
+ttBinderSize (PVTy ty)      = 1 + (ttSize ty)
+@-}
+-- HACK ALERT: assumption that terms are never cyclic
+{-@ invariant {v:Binder (TT n)|ttBinderSize v >= 0} @-}
+
+
+-- A measure of the size of a core term, used for the Liquid Haskell termination checker
+{-@
+measure
+ttSize :: TT n -> Int
+ttSize (P nt n ty)     = 1 + (ttSize ty)
+ttSize (V i)           = 1
+ttSize (Bind n b body) = 1 + (ttBinderSize b) + (ttSize body)
+ttSize (App f arg)     = 1 + (ttSize f) + (ttSize arg)
+ttSize (Constant c)    = 1
+ttSize (Proj tm i)     = 1 + (ttSize tm)
+ttSize (Erased)        = 1
+ttSize (Impossible)    = 1
+ttSize (TType u)       = 1
+ttSize (UType u)       = 1
+@-}
+-- HACK ALERT: assumption that terms are never cyclic
+{-@ invariant {v:TT n|ttSize v >= 0} @-}
+
+-- Helper measure for ttSize that ignores type annotations
+{-@
+measure
+ttBinderSizeNoAnnots :: Binder (TT n) -> Int
+ttBinderSizeNoAnnots (Lam ty)       = 1
+ttBinderSizeNoAnnots (Pi ty x)      = 1 + (ttSizeNoAnnots x)
+ttBinderSizeNoAnnots (Let ty val)   = 1 + (ttSizeNoAnnots val)
+ttBinderSizeNoAnnots (NLet ty val)  = 1 + (ttSizeNoAnnots val)
+ttBinderSizeNoAnnots (Hole ty)      = 1
+ttBinderSizeNoAnnots (GHole x ty)   = 1
+ttBinderSizeNoAnnots (Guess ty val) = 1 + (ttSizeNoAnnots val)
+ttBinderSizeNoAnnots (PVar ty)      = 1
+ttBinderSizeNoAnnots (PVTy ty)      = 1
+@-}
+-- HACK ALERT: assumption that terms are never cyclic
+{-@ invariant {v:Binder (TT n)|ttBinderSizeNoAnnots v >= 0} @-}
+
+
+-- A measure of the size of a core term that ignores type annotations, used
+-- for the Liquid Haskell termination checker when instantiating variables (ie
+-- eliminating de Bruijn indices)
+{-@
+measure
+ttSizeNoAnnots :: TT n -> Int
+ttSizeNoAnnots (P nt n ty)     = 1 + (ttSizeNoAnnots ty)
+ttSizeNoAnnots (V i)           = 1
+ttSizeNoAnnots (Bind n b body) = 1 + (ttBinderSizeNoAnnots b) + (ttSizeNoAnnots body)
+ttSizeNoAnnots (App f arg)     = 1 + (ttSizeNoAnnots f) + (ttSizeNoAnnots arg)
+ttSizeNoAnnots (Constant c)    = 1
+ttSizeNoAnnots (Proj tm i)     = 1 + (ttSizeNoAnnots tm)
+ttSizeNoAnnots (Erased)        = 1
+ttSizeNoAnnots (Impossible)    = 1
+ttSizeNoAnnots (TType u)       = 1
+ttSizeNoAnnots (UType u)       = 1
+@-}
+-- HACK ALERT: assumption that terms are never cyclic
+{-@ invariant {v:TT n|ttSizeNoAnnots v >= 0} @-}
+
+
+
+-- Liquid Haskell measures to distinguish between de Bruijn-indexed terms and
+-- locally named terms
+{-@
+measure containsV ::  TT n -> Prop
+containsV (P nt n ty)     = (containsV ty)
+containsV (V i)           = true
+containsV (Bind n b body) = (binderContainsV b) || (containsV body)
+containsV (App f arg)     = (containsV f) || (containsV arg)
+containsV (Constant c)    = false
+containsV (Proj tm i)     = (containsV tm)
+containsV (Erased)        = false
+containsV (Impossible)    = false
+containsV (TType u)       = false
+containsV (UType u)       = false
+@-}
+{-@
+measure binderContainsV :: Binder (TT n) -> Prop
+binderContainsV (Lam ty)       = (containsV ty)
+binderContainsV (Pi ty x)      = (containsV ty) || (containsV x)
+binderContainsV (Let ty val)   = (containsV ty) || (containsV val)
+binderContainsV (NLet ty val)  = (containsV ty) || (containsV val)
+binderContainsV (Hole ty)      = (containsV ty)
+binderContainsV (GHole x ty)   = (containsV ty)
+binderContainsV (Guess ty val) = (containsV ty) || (containsV val)
+binderContainsV (PVar ty)      = (containsV ty)
+binderContainsV (PVTy ty)      = (containsV ty)
+@-}
 
 class TermSize a where
   termsize :: Name -> a -> Int
@@ -852,29 +1101,36 @@ isInjective (Bind _ (Pi _ _) sc) = True
 isInjective (App f a)          = isInjective f
 isInjective _                  = False
 
+{-@ vinstances :: _ -> tm:_ -> _ / [ttSize tm] @-}
 -- | Count the number of instances of a de Bruijn index in a term
 vinstances :: Int -> TT n -> Int
 vinstances i (V x) | i == x = 1
 vinstances i (App f a) = vinstances i f + vinstances i a
-vinstances i (Bind x b sc) = instancesB b + vinstances (i + 1) sc
-  where instancesB (Let t v) = vinstances i v
-        instancesB _ = 0
+vinstances i (Bind x b sc) = vinstancesB i b + vinstances (i + 1) sc
 vinstances i t = 0
+
+-- NB: Lifted to top level to make Liquid Haskell happy
+{-@ vinstancesB :: Int -> b : Binder (TT n) -> Int / [ttBinderSize b] @-}
+vinstancesB :: Int -> Binder (TT n) -> Int
+vinstancesB i (Let t v) = vinstances i v
+vinstancesB i _ = 0
+
 
 -- | Replace the outermost (index 0) de Bruijn variable with the given term
 instantiate :: TT n -> TT n -> TT n
 instantiate e = subst 0 where
-    subst i (V x) | i == x = e
-    subst i (Bind x b sc) = Bind x (fmap (subst i) b) (subst (i+1) sc)
-    subst i (App f a) = App (subst i f) (subst i a)
-    subst i (Proj x idx) = Proj (subst i x) idx
-    subst i t = t
+    subst i (V x) | i == x  = e
+    subst i (Bind x b sc)   = Bind x (fmap (subst i) b) (subst (i+1) sc)
+    subst i (App f a)       = App (subst i f) (subst i a)
+    subst i (Proj x idx)    = Proj (subst i x) idx
+    subst i t               = t
 
 -- | As 'instantiate', but also decrement the indices of all de Bruijn variables
 -- remaining in the term, so that there are no more references to the variable
 -- that has been substituted.
 substV :: TT n -> TT n -> TT n
 substV x tm = dropV 0 (instantiate x tm) where
+    {-@ dropV :: Int -> tm:TT n -> TT n / [ttSize tm] @-}
     dropV i (V x) | x > i = V (x - 1)
                   | otherwise = V x
     dropV i (Bind x b sc) = Bind x (fmap (dropV i) b) (dropV (i+1) sc)
@@ -882,13 +1138,15 @@ substV x tm = dropV 0 (instantiate x tm) where
     dropV i (Proj x idx) = Proj (dropV i x) idx
     dropV i t = t
 
+
 -- | Replace all non-free de Bruijn references in the given term with references
 -- to the name of their binding.
 explicitNames :: TT n -> TT n
 explicitNames (Bind x b sc) = let b' = fmap explicitNames b in
                                   Bind x b'
-                                     (explicitNames (instantiate
-                                        (P Bound x (binderTy b')) sc))
+                                    (explicitNames
+                                      (instantiate (P Bound x (binderTy b'))
+                                                   sc))
 explicitNames (App f a) = App (explicitNames f) (explicitNames a)
 explicitNames (Proj x idx) = Proj (explicitNames x) idx
 explicitNames t = t
@@ -927,6 +1185,7 @@ pToVs ns tm = pToVs' ns tm 0 where
 -- | Replace de Bruijn indices in the given term with explicit references to
 -- the names of the bindings they refer to. It is an error if the given term
 -- contains free de Bruijn indices.
+{-@ vToP :: tm1:TT n -> {tm2:TT n | not (containsV tm2)} @-}
 vToP :: TT n -> TT n
 vToP = vToP' [] where
     vToP' env (V i) = let (n, b) = (env !! i) in
@@ -966,6 +1225,7 @@ subst n v tm = fst $ subst' 0 tm
     -- ('Maybe' would be neater here, but >>= is not the right combinator.
     -- Feel free to tidy up, as long as it still saves allocating when no
     -- substitution happens...)
+    {-@ subst' :: Int -> tm:TT n -> (TT n, Bool) / [ttSize tm] @-}
     subst' i (V x) | i == x = (v, True)
     subst' i (P _ x _) | n == x = (v, True)
     subst' i t@(Bind x b sc) | x /= n
@@ -979,6 +1239,7 @@ subst n v tm = fst $ subst' 0 tm
                                   if u then (Proj x' idx, u) else (t, False)
     subst' i t = (t, False)
 
+    {-@ substB' :: Int -> b:Binder (TT n) -> (Binder (TT n), Bool) / [ttBinderSize b] @-}
     substB' i b@(Let t v) = let (t', ut) = subst' i t
                                 (v', uv) = subst' i v in
                                 if ut || uv then (Let t' v', True)
@@ -1039,6 +1300,7 @@ occurrences n t = execState (no' 0 t) 0
 noOccurrence :: Eq n => n -> TT n -> Bool
 noOccurrence n t = no' 0 t
   where
+    {-@ no' :: _ -> tm:TT n -> _ / [ttSize tm] @-}
     no' i (V x) = not (i == x)
     no' i (P Bound x _) = not (n == x)
     no' i (Bind n b sc) = noB' i b && no' (i+1) sc
@@ -1067,9 +1329,11 @@ arity _ = 0
 -- | Deconstruct an application; returns the function and a list of arguments
 unApply :: TT n -> (TT n, [TT n])
 unApply t = ua [] t where
+    {-@ ua :: _ -> tm:TT n -> _ / [ttSize tm] @-}
     ua args (App f a) = ua (a:args) f
     ua args t         = (t, args)
 
+{-@ mkApp :: _ -> args:_ -> _ / [len args] @-} -- decreasing on xs for Liquid Haskell
 -- | Returns a term representing the application of the first argument
 -- (a function) to every element of the second argument.
 mkApp :: TT n -> [TT n] -> TT n
@@ -1137,9 +1401,12 @@ uniqueName :: Name -> [Name] -> Name
 uniqueName n hs | n `elem` hs = uniqueName (nextName n) hs
                 | otherwise   = n
 
+{-@ Lazy uniqueNameSet @-} -- turn off Liquid Haskell termination check for this defn
+-- | Given a "hint" name and a set of names, generate a fresh name based on
+-- the hint that does not occur in the set of names.
 uniqueNameSet :: Name -> Set Name -> Name
 uniqueNameSet n hs | n `member` hs = uniqueNameSet (nextName n) hs
-                | otherwise   = n
+                   | otherwise     = n
 
 uniqueBinders :: [Name] -> TT Name -> TT Name
 uniqueBinders ns = ubSet (fromList ns) where
@@ -1150,7 +1417,8 @@ uniqueBinders ns = ubSet (fromList ns) where
     ubSet ns (App f a) = App (ubSet ns f) (ubSet ns a)
     ubSet ns t = t
 
-
+{-@ nextName :: n1:Name -> {n2:Name | nameSize n1 = nameSize n2} @-}
+nextName :: Name -> Name
 nextName (NS x s)    = NS (nextName x) s
 nextName (MN i n)    = MN (i+1) n
 nextName (UN x) = let (num', nm') = T.span isDigit (T.reverse x)
@@ -1162,10 +1430,15 @@ nextName (UN x) = let (num', nm') = T.span isDigit (T.reverse x)
     readN x = 0
 nextName (SN x) = SN (nextName' x)
   where
+    {-@ nextName' :: sn1:_ -> {sn2:_ | specialNameSize sn1 = specialNameSize sn2} @-}
     nextName' (WhereN i f x) = WhereN i f (nextName x)
     nextName' (WithN i n) = WithN i (nextName n)
+    nextName' (InstanceN n ns) = InstanceN (nextName n) ns
+    nextName' (ParentN n t) = ParentN (nextName n) t
     nextName' (CaseN n) = CaseN (nextName n)
     nextName' (MethodN n) = MethodN (nextName n)
+    nextName' (ElimN n) = ElimN (nextName n)
+    nextName' (InstanceCtorN n) = InstanceCtorN (nextName n)
 
 type Term = TT Name
 type Type = Term
@@ -1351,6 +1624,7 @@ weakenTmEnv i = map (\ (n, b) -> (n, fmap (weakenTm i) b))
 orderPats :: Term -> Term
 orderPats tm = op [] tm
   where
+    {-@ op :: _ -> tm:_ -> _ / [ttSize tm] @-}
     op [] (App f a) = App f (op [] a) -- for Infer terms
 
     op ps (Bind n (PVar t) sc) = op ((n, PVar t) : ps) sc
@@ -1368,6 +1642,7 @@ orderPats tm = op [] tm
     namesIn (App f a) = nub (namesIn f ++ namesIn a)
     namesIn _ = []
 
+    {-@ pick :: _ -> xs:_ -> _ / [len xs] @-}
     pick acc [] = reverse acc
     pick acc ((n, t) : ps) = pick (insert n t acc) ps
 
@@ -1378,7 +1653,7 @@ orderPats tm = op [] tm
             = (n', t') : insert n t ps
         | otherwise = (n,t):(n',t'):ps
 
--- Make sure all the pattern bindings are as far out as possible
+-- | Make sure all the pattern bindings are as far out as possible
 liftPats :: Term -> Term
 liftPats tm = let (tm', ps) = runState (getPats tm) [] in
                   orderPats $ bindPats (reverse ps) tm'
@@ -1388,6 +1663,7 @@ liftPats tm = let (tm', ps) = runState (getPats tm) [] in
          | n `notElem` map fst ps = Bind n (PVar t) (bindPats ps tm)
          | otherwise = bindPats ps tm
 
+    {-@ getPats :: Term -> State [(Name, Type)] Term @-}
     getPats :: Term -> State [(Name, Type)] Term
     getPats (Bind n (PVar t) sc) = do ps <- get
                                       put ((n, t) : ps)

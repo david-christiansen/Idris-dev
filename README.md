@@ -28,6 +28,9 @@ The Idris wiki contains instructions for building on various platforms and for
 getting involved with development. It is located at
 https://github.com/idris-lang/Idris-dev/wiki.
 
+There are Liquid Haskell invariants for parts of the system. See
+README-Liquid.md for details.
+
 Idris has support for external code generators. Supplied with the distribution
 is a C code generator to compile executables, and a JavaScript code generator
 with support for node.js and browser JavaScript.
