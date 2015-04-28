@@ -1331,6 +1331,11 @@ eqOpts = []
 modDocName :: Name
 modDocName = sMN 0 "ModuleDocs"
 
+-- | The (machine-only) name of the generated accessor for the
+-- constructor of typed quotations.
+mkTypedQuoteName :: Name
+mkTypedQuoteName = sMN 0 "internal__MkTypedQuoteName"
+
 -- Defined in builtins.idr
 sigmaTy   = sNS (sUN "Sigma") ["Builtins"]
 existsCon = sNS (sUN "MkSigma") ["Builtins"]

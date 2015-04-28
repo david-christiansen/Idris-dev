@@ -1052,7 +1052,10 @@ elab ist info emode opts fn tm
              nTm <- getNameFrom (sMN 0 "quotedTerm")
              letbind nTm (Var qTy) (Var qTm)
 
-             -- Fill out the goal type, if relevant
+             -- Fill out the goal type, if relevant. It would be nice
+             -- to use an annotation from a typed quote here for
+             -- disambiguation, but that will only work for closed
+             -- types, which we can't guarantee in general.
              case goalt of
                Nothing  -> return ()
                Just gTy -> do focus qTy
@@ -1099,7 +1102,12 @@ elab ist info emode opts fn tm
                                                Just foundTy ->
                                                  (RApp (RApp (Var $ reflm "untyped") (forget foundTy)) (Var x))
                                                Nothing -> Var x
-                                     fill (RApp (RApp (Var $ reflm "MkTypedQuote") (forget qt'))
+                                     -- We fill with a special,
+                                     -- user-inaccessible name that
+                                     -- works around the fact that the
+                                     -- constructor is private. This
+                                     -- is created in ElabDecls.hs.
+                                     fill (RApp (RApp (Var mkTypedQuoteName) (forget qt'))
                                                 (reflectTTQuote unTy unquoteNames q'))
                                      solve
                Nothing -> lift . tfail . Msg $ "Broken elaboration of quasiquote - lost let binding of " ++ show nTm

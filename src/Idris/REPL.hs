@@ -1621,6 +1621,9 @@ idrisMain opts =
                                                 return ()
        when (not (NoPrelude `elem` opts)) $ do x <- loadModule "Prelude"
                                                addAutoImport "Prelude"
+                                               -- generate the aux. defn. used
+                                               -- by typed quotes
+                                               elabTyQuoteEscape
                                                return ()
 
        when (runrepl && not idesl) initScript

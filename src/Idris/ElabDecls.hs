@@ -143,6 +143,32 @@ elabPrims = do mapM_ (elabDecl' EAll recinfo)
                      idris_scprims = (synEq, (4, LNoOp)) : idris_scprims i
                     }
 
+-- | Elaborate the hidden name "escape hatch" for the typed quasiquote
+-- constructor. NB: import the Prelude first!
+elabTyQuoteEscape :: Idris ()
+elabTyQuoteEscape = do logLvl 2 "Adding escape hatch for MkTypedQuote"
+                       updateIState (\i -> i {tt_ctxt = setAccess conN Public (tt_ctxt i)})
+                       mapM (elabDecl' EAll recinfo) [decl, clause]
+                       updateIState (\i -> i {tt_ctxt = setAccess conN Hidden (tt_ctxt i)})
+  where decl = PTy (fst noDocs) (snd noDocs) defaultSyntax emptyFC [] mkTypedQuoteName $
+                 PPi plic (sMN 0 "quoTy") PType $
+                   PPi plic (sMN 0 "quo") (PRef emptyFC ttqN) $
+                     (PApp emptyFC (PRef emptyFC tyConN)
+                           [arg $ PRef emptyFC (sMN 0 "quoTy")])
+        clause = PClauses emptyFC [] mkTypedQuoteName
+                   [PClause emptyFC mkTypedQuoteName lhs [] rhs []]
+
+        plic = Exp [] Dynamic False
+        arg = PExp 0 [] (sMN 0 "x")
+        ttqN = sNS (sUN "TT") ["Reflection", "Language"]
+        tyConN = sNS (sUN "TypedQuote") ["Reflection", "Language"]
+        conN = sNS (sUN "MkTypedQuote") ["Reflection", "Language"]
+        lhs = (PApp emptyFC (PRef emptyFC mkTypedQuoteName)
+                    [ arg $ PRef emptyFC (sMN 0 "tyArg")
+                    , arg $ PRef emptyFC (sMN 0 "ttArg")
+                    ])
+        rhs = (PApp emptyFC (PRef emptyFC conN)
+                    [ arg $ PRef emptyFC (sMN 0 "ttArg") ])
 
 elabDecls :: ElabInfo -> [PDecl] -> Idris ()
 elabDecls info ds = do mapM_ (elabDecl EAll info) ds
