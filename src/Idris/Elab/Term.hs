@@ -989,34 +989,56 @@ elab ist info emode opts fn tm
                                     elab' ina fc t
                                     unifyLog False
     elab' ina fc (PQuasiquote t goalt)
-        = do -- First extract the unquoted subterms, replacing them with fresh
-             -- names in the quasiquoted term. Claim their reflections to be
-             -- an inferred type (to support polytypic quasiquotes).
-             finalTy <- goal
+        = do finalTy <- goal
+             quotationGoal <- do ctxt <- get_context
+                                 env <- get_env
+                                 return $ qqGoal (normaliseAll ctxt env finalTy)
+
+             -- First extract the unquoted subterms, replacing them
+             -- with fresh names in the quasiquoted term. Claim their
+             -- reflections to be either the final quotation goal type
+             -- (in the case of Raw and TT) or a typed goal with an
+             -- inferred typed parameter (in the case of TypedQuote a)
              (t, unq) <- extractUnquotes 0 t
              let unquoteNames = map fst unq
-             mapM_ (\uqn -> claim uqn (forget finalTy)) unquoteNames
+             mapM_ (\uqn -> case quotationGoal of
+                               Just (TypedGoal _) ->
+                                 do tyH <- getNameFrom (sMN 0 "a")
+                                    claim tyH RType
+                                    movelast tyH
+                                    claim uqn (RApp (Var (reflm "TypedQuote")) (Var tyH))
+                               _ -> claim uqn (forget finalTy)) unquoteNames
 
              -- Save the old state - we need a fresh proof state to avoid
              -- capturing lexically available variables in the quoted term.
-             ctxt <- get_context
              datatypes <- get_datatypes
+             ctxt <- get_context
              saveState
              updatePS (const .
                        newProof (sMN 0 "q") ctxt datatypes $
                        P Ref (reflm "TT") Erased)
 
-             -- Re-add the unquotes, letting Idris infer the (fictional)
-             -- types. Here, they represent the real type rather than the type
-             -- of their reflection.
-             mapM_ (\n -> do ty <- getNameFrom (sMN 0 "unqTy")
-                             claim ty RType
-                             movelast ty
-                             claim n (Var ty)
-                             movelast n)
-                   unquoteNames
+             -- Re-add the unquotes, letting Idris infer the
+             -- (fictional) types. Here, they represent the type of
+             -- the quoted term rather than the type of their
+             -- reflection. Save the mappings in case we're using
+             -- typed quotations.
+             unquoteTys <- mapM (\n -> do ty <- getNameFrom (sMN 0 "unqTy")
+                                          claim ty RType
+                                          movelast ty
+                                          claim n (Var ty)
+                                          movelast n
+                                          return (n, ty))
+                                unquoteNames
 
-             -- Determine whether there's an explicit goal type, and act accordingly
+             -- Let-bind the unquotation types, so that we can keep the results
+             -- for typed quasiquotation
+             mapM_ (\(unqN, tyN) ->
+                     letbind (SN (MetaN unqN (sUN "type")))
+                             RType
+                             (Var tyN))
+                   unquoteTys
+
              -- Establish holes for the type and value of the term to be
              -- quasiquoted
              qTy <- getNameFrom (sMN 0 "qquoteTy")
@@ -1041,28 +1063,46 @@ elab ist info emode opts fn tm
              elabE (ina { e_qq = True }) fc t
              end_unify
 
-             -- We now have an elaborated term. Reflect it and solve the
-             -- original goal in the original proof state.
+             -- We now have an elaborated term. Reflect it and solve
+             -- the original goal in the original proof state. Because
+             -- we let-bound the elaborated term while quoting, we
+             -- first need to keep the local environment from the
+             -- fresh state.
              env <- get_env
              loadState
              let quoted = fmap (explicitNames . binderVal) $ lookup nTm env
-                 isRaw = case unApply (normaliseAll ctxt env finalTy) of
-                           (P _ n _, []) | n == reflm "Raw" -> True
-                           _ -> False
              case quoted of
                Just q -> do ctxt <- get_context
-                            (q', _, _) <- lift $ recheck ctxt [(uq, Lam Erased) | uq <- unquoteNames] (forget q) q
-                            if pattern
-                              then if isRaw
-                                      then reflectRawQuotePattern unquoteNames (forget q')
-                                      else reflectTTQuotePattern unquoteNames q'
-                              else do if isRaw
-                                        then -- we forget q' instead of using q to ensure rechecking
-                                             fill $ reflectRawQuote unquoteNames (forget q')
-                                        else fill $ reflectTTQuote unquoteNames q'
+                            (q', qt', _) <- lift $ recheck ctxt [(uq, Lam Erased) | uq <- unquoteNames] (forget q) q
+                            case quotationGoal of
+                              Nothing -> lift . tfail . Msg $
+                                           "Broken elaboration of quasiquote - unknown goal type"
+                              Just RawGoal
+                                | pattern -> reflectRawQuotePattern unquoteNames (forget q')
+                                | otherwise ->
+                                   -- we forget q' instead of using q to ensure rechecking
+                                   do fill $ reflectRawQuote unquoteNames (forget q')
                                       solve
-
-               Nothing -> lift . tfail . Msg $ "Broken elaboration of quasiquote"
+                              Just TTGoal
+                                | pattern -> reflectTTQuotePattern unquoteNames q'
+                                | otherwise ->
+                                   do fill $ reflectTTQuote Var unquoteNames q'
+                                      solve
+                              Just (TypedGoal a)
+                                | pattern -> lift . tfail . Msg $ "No typed qq patterns yet"
+                                | otherwise ->
+                                  -- TODO: conversion check of a and qt' for better error message
+                                  do let unTy = \x ->
+                                          let ty = fmap binderVal $
+                                                   lookup (SN (MetaN x (sUN "type"))) env
+                                          in case ty of
+                                               Just foundTy ->
+                                                 (RApp (RApp (Var $ reflm "untyped") (forget foundTy)) (Var x))
+                                               Nothing -> Var x
+                                     fill (RApp (RApp (Var $ reflm "MkTypedQuote") (forget qt'))
+                                                (reflectTTQuote unTy unquoteNames q'))
+                                     solve
+               Nothing -> lift . tfail . Msg $ "Broken elaboration of quasiquote - lost let binding of " ++ show nTm
 
              -- Finally fill in the terms or patterns from the unquotes. This
              -- happens last so that their holes still exist while elaborating
@@ -1082,7 +1122,7 @@ elab ist info emode opts fn tm
            [] -> lift . tfail . NoSuchVariable $ n
            more -> lift . tfail . CantResolveAlts $ map fst more
     elab' ina fc (PAs _ n t) = lift . tfail . Msg $ "@-pattern not allowed here"
-    elab' ina fc (PHidden t) 
+    elab' ina fc (PHidden t)
       | reflection = elab' ina fc t
       | otherwise
         = do (h : hs) <- get_holes

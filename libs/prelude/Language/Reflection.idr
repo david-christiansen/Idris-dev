@@ -202,6 +202,14 @@ data Raw =
          RConstant Const
 %name Raw tm, tm'
 
+||| A quotation of a term with type `a`.
+data TypedQuote : Type -> Type where
+  MkTypedQuote : {a : Type} -> TT -> TypedQuote a
+
+||| Erase the type from a typed quotation
+untyped : {a : Type} -> TypedQuote a -> TT
+untyped {a} (MkTypedQuote q) = q
+
 data SourceLocation : Type where
   FileLoc : (filename : String) -> (start : (Int, Int)) -> (end : (Int, Int)) -> SourceLocation
 

@@ -20,6 +20,18 @@ import Idris.AbsSyntaxTree (ElabD, IState, PArg'(..), PArg, PTactic, PTactic'(..
                             PTerm(..), initEState, pairCon, pairTy)
 import Idris.Delaborate (delab)
 
+-- | An enumeration of the types into which a term can be quoted
+data ReflectionGoalType = RawGoal | TTGoal | TypedGoal Type
+
+-- | Decide what type of goal is being filled with a quotation. This
+-- is to avoid nasty nested Bools.
+qqGoal :: Type -> Maybe ReflectionGoalType
+qqGoal ty = case unApply ty of
+              (P _ n _, []) | n == reflm "Raw" -> Just RawGoal
+                            | n == reflm "TT" -> Just TTGoal
+              (P _ n _, [a]) | n == reflm "TypedQuote" -> Just $ TypedGoal a
+              _ -> Nothing
+
 data RArg = RExplicit   { argName :: Name, argTy :: Raw }
           | RImplicit   { argName :: Name, argTy :: Raw }
           | RConstraint { argName :: Name, argTy :: Raw }
@@ -346,7 +358,7 @@ reflCall funName args
 
 -- | Lift a term into its Language.Reflection.TT representation
 reflect :: Term -> Raw
-reflect = reflectTTQuote []
+reflect = reflectTTQuote Var []
 
 -- | Lift a term into its Language.Reflection.Raw representation
 reflectRaw :: Raw -> Raw
@@ -575,25 +587,27 @@ reflectUniverse u =
                  UniqueType -> "UniqueType"
                  AllTypes -> "AllTypes")))
 
--- | Create a reflected TT term, but leave refs to the provided name intact
-reflectTTQuote :: [Name] -> Term -> Raw
-reflectTTQuote unq (P nt n t)
-  | n `elem` unq = Var n
-  | otherwise = reflCall "P" [reflectNameType nt, reflectName n, reflectTTQuote unq t]
-reflectTTQuote unq (V n)
+-- | Create a reflected TT term, but leave refs to the provided names intact.
+-- Use the provided function to instantiate the provided names.
+reflectTTQuote :: (Name -> Raw) -- ^ How to instantiate an unquote name (often Var)
+               -> [Name] -> Term -> Raw
+reflectTTQuote f unq (P nt n t)
+  | n `elem` unq = f n
+  | otherwise = reflCall "P" [reflectNameType nt, reflectName n, reflectTTQuote f unq t]
+reflectTTQuote f unq (V n)
   = reflCall "V" [RConstant (I n)]
-reflectTTQuote unq (Bind n b x)
-  = reflCall "Bind" [reflectName n, reflectBinderQuote reflectTTQuote (reflm "TT") unq b, reflectTTQuote unq x]
-reflectTTQuote unq (App _ f x)
-  = reflCall "App" [reflectTTQuote unq f, reflectTTQuote unq x]
-reflectTTQuote unq (Constant c)
+reflectTTQuote f unq (Bind n b x)
+  = reflCall "Bind" [reflectName n, reflectBinderQuote (reflectTTQuote f) (reflm "TT") unq b, reflectTTQuote f unq x]
+reflectTTQuote f unq (App _ fun arg)
+  = reflCall "App" [reflectTTQuote f unq fun, reflectTTQuote f unq arg]
+reflectTTQuote f unq (Constant c)
   = reflCall "TConst" [reflectConstant c]
-reflectTTQuote unq (Proj t i)
-  = reflCall "Proj" [reflectTTQuote unq t, RConstant (I i)]
-reflectTTQuote unq (Erased) = Var (reflm "Erased")
-reflectTTQuote unq (Impossible) = Var (reflm "Impossible")
-reflectTTQuote unq (TType exp) = reflCall "TType" [reflectUExp exp]
-reflectTTQuote unq (UType u) = reflCall "UType" [reflectUniverse u]
+reflectTTQuote f unq (Proj t i)
+  = reflCall "Proj" [reflectTTQuote f unq t, RConstant (I i)]
+reflectTTQuote f unq (Erased) = Var (reflm "Erased")
+reflectTTQuote f unq (Impossible) = Var (reflm "Impossible")
+reflectTTQuote f unq (TType exp) = reflCall "TType" [reflectUExp exp]
+reflectTTQuote f unq (UType u) = reflCall "UType" [reflectUniverse u]
 
 reflectRawQuote :: [Name] -> Raw -> Raw
 reflectRawQuote unq (Var n)
@@ -682,7 +696,7 @@ reflectNameQuotePattern _ -- for all other names, match any
        solve
 
 reflectBinder :: Binder Term -> Raw
-reflectBinder = reflectBinderQuote reflectTTQuote (reflm "TT") []
+reflectBinder = reflectBinderQuote (reflectTTQuote Var) (reflm "TT") []
 
 reflectBinderQuote :: ([Name] -> a -> Raw) -> Name -> [Name] -> Binder a -> Raw
 reflectBinderQuote q ty unq (Lam t)
