@@ -33,6 +33,8 @@ New in 0.9.18:
 * A new :browse command shows the contents of a namespace
 * `{n} is syntax for a quotation of the reflected representation of the global
   name n, if it is uniquely determined
+* Experimental support for typed quasiquotations. Use the type constructor
+  Language.Reflection.TypedQuote with the ordinary quotation syntax.
 
 New in 0.9.17:
 --------------
