@@ -1,0 +1,17 @@
+quasiquote007.idr:19:6:
+When elaborating right hand side of bad1:
+Can't unify
+        TypedQuote String (Type of internal__MkTypedQuoteName String
+                                                              (TConst (Str "nope!")))
+with
+        TypedQuote Nat (Expected type)
+
+Specifically:
+        Can't unify
+                String
+        with
+                Nat
+quasiquote007.idr:22:6:Can't convert
+        TypedQuote String
+with
+        TypedQuote Nat

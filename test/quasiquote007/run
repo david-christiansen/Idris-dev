@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+idris $@ --quiet --consolewidth 70 --nocolour quasiquote007.idr
+rm -f *.ibc
