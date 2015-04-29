@@ -311,6 +311,12 @@ class Quotable a t where
   ||| Each equation should look something like ```quote (Foo x y) = `(Foo ~(quote x) ~(quote y))```
   quote : a -> t
 
+typedQuotedTy : Quotable a TT => TypedQuote Type
+typedQuotedTy {a} = MkTypedQuote $ quotedTy {a}
+
+typedQuote : Quotable a TT => a -> TypedQuote a
+typedQuote x = MkTypedQuote $ quote x
+
 instance Quotable Nat TT where
   quotedTy = `(Nat)
 
