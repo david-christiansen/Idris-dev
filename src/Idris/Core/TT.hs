@@ -163,7 +163,8 @@ data Err' t
           | CantResolveAlts [Name]
           | IncompleteTerm t
           | NoEliminator String t
-          | UniverseError
+          | UniverseError FC UExp (Int, Int) (Int, Int) [ConstraintFC]
+            -- ^ Location, bad universe, old domain, new domain, suspects
           | UniqueError Universe Name
           | UniqueKindError Universe Name
           | ProgramLineComment
@@ -180,8 +181,9 @@ data Err' t
           | LoadingFailed String (Err' t)
           | ReflectionError [[ErrorReportPart]] (Err' t)
           | ReflectionFailed String (Err' t)
-          | ElabDebug (Maybe String) t [(Name, t, [(Name, Binder t)])]
+          | ElabScriptDebug (Maybe String) t [(Name, t, [(Name, Binder t)])]
             -- ^ User-specified message, proof term, goals with context (first goal is focused)
+          | ElabScriptStuck t
   deriving (Eq, Functor, Data, Typeable)
 
 type Err = Err' Term
@@ -240,7 +242,6 @@ instance Sized Err where
   size (NoRewriting trm) = size trm
   size (CantResolveAlts _) = 1
   size (IncompleteTerm trm) = size trm
-  size UniverseError = 1
   size ProgramLineComment = 1
   size (At fc err) = size fc + size err
   size (Elaborating _ n err) = size err
@@ -776,11 +777,11 @@ instance Show UExp where
 -- | Universe constraints
 data UConstraint = ULT UExp UExp -- ^ Strictly less than
                  | ULE UExp UExp -- ^ Less than or equal to
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Data, Typeable)
 
 data ConstraintFC = ConstraintFC { uconstraint :: UConstraint,
                                    ufc :: FC }
-  deriving Show
+  deriving (Show, Data, Typeable)
 
 instance Eq ConstraintFC where
     x == y = uconstraint x == uconstraint y  
