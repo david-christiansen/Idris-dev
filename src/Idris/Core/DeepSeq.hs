@@ -107,6 +107,7 @@ instance NFData Err where
         rnf (LoadingFailed x1 x2) = rnf x1 `seq` rnf x2 `seq` ()
         rnf (ElabScriptDebug x1 x2 x3) = rnf x1 `seq` rnf x2 `seq` rnf x3 `seq` ()
         rnf (ElabScriptStuck x1) = rnf x1 `seq` ()
+        rnf (CantQuoteInto x1) = rnf x1 `seq` ()
 
 instance NFData ImplicitInfo where
         rnf (Impl x1) = rnf x1 `seq` ()

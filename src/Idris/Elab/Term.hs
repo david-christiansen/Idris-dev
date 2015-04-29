@@ -996,19 +996,26 @@ elab ist info emode opts fn tm
              let quotationGoal = qqGoal normFinalTy
 
              -- If the quotation goal is TypedQuote t, then find out
-             -- if the normal form of t is a closed type. This can be
-             -- used to drive disambiguation if no explicit goal type
-             -- is provided by the user for the quotation.
+             -- if the normal form of t is a closed type (that is,
+             -- find out if its type when normalised in the empty
+             -- lexical environment is a universe). This can be used
+             -- to drive disambiguation if no explicit goal type is
+             -- provided by the user for the quotation.
              externalGoal <- case quotationGoal of
                                Just (TypedGoal t) ->
                                  do ctxt <- get_context
                                     let env = []
-                                        t' = normaliseAll ctxt env t
-                                    tt' <- fmap snd . lift $
-                                             check ctxt env (forget t')
-                                    if isUniverse tt'
-                                       then return (Just t')
-                                       else return Nothing -- no usable hint
+                                    -- Attempt to check the external goal in the
+                                    -- empty lexical environment, returning Nothing
+                                    -- on failure
+                                    try' (do let t' = normaliseAll ctxt env t
+                                             tt' <- fmap snd . lift $
+                                                     check ctxt env (forget t')
+                                             if isUniverse tt'
+                                                then return (Just t')
+                                                else return Nothing)
+                                         (return Nothing)
+                                         True
                                _ -> return Nothing
 
              -- First extract the unquoted subterms, replacing them
