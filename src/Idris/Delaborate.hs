@@ -296,6 +296,8 @@ pprintErr' i (InvalidTCArg n t)
    = annTm t (pprintTerm i (delab i t)) <+> text " cannot be a parameter of "
         <> annName n <$>
         text "(Type class arguments must be injective)"
+pprintErr' i (CantQuoteInto ty) = text "Invalid quotation type:" <>
+                                  indented (align (annTm ty (pprintTerm i (delab i ty))))
 pprintErr' i (CantResolveAlts as) = text "Can't disambiguate name:" <+>
                                     align (cat (punctuate (comma <> space) (map (fmap (fancifyAnnots i) . annName) as)))
 pprintErr' i (NoTypeDecl n) = text "No type declaration for" <+> annName n

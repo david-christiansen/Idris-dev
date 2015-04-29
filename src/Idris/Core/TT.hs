@@ -159,6 +159,7 @@ data Err' t
           | CantResolve Bool -- True if postponed, False if fatal
                         t
           | InvalidTCArg Name t
+          | CantQuoteInto t
           | CantResolveAlts [Name]
           | IncompleteTerm t
           | NoEliminator String t

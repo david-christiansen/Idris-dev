@@ -990,9 +990,26 @@ elab ist info emode opts fn tm
                                     unifyLog False
     elab' ina fc (PQuasiquote t goalt)
         = do finalTy <- goal
-             quotationGoal <- do ctxt <- get_context
-                                 env <- get_env
-                                 return $ qqGoal (normaliseAll ctxt env finalTy)
+             normFinalTy <- do ctxt <- get_context
+                               env <- get_env
+                               return $ normaliseAll ctxt env finalTy
+             let quotationGoal = qqGoal normFinalTy
+
+             -- If the quotation goal is TypedQuote t, then find out
+             -- if the normal form of t is a closed type. This can be
+             -- used to drive disambiguation if no explicit goal type
+             -- is provided by the user for the quotation.
+             externalGoal <- case quotationGoal of
+                               Just (TypedGoal t) ->
+                                 do ctxt <- get_context
+                                    let env = []
+                                        t' = normaliseAll ctxt env t
+                                    tt' <- fmap snd . lift $
+                                             check ctxt env (forget t')
+                                    if isUniverse tt'
+                                       then return (Just t')
+                                       else return Nothing -- no usable hint
+                               _ -> return Nothing
 
              -- First extract the unquoted subterms, replacing them
              -- with fresh names in the quasiquoted term. Claim their
@@ -1057,7 +1074,11 @@ elab ist info emode opts fn tm
              -- disambiguation, but that will only work for closed
              -- types, which we can't guarantee in general.
              case goalt of
-               Nothing  -> return ()
+               Nothing  -> case externalGoal of
+                             Just t -> do focus qTy
+                                          fill (forget t)
+                                          solve
+                             _      -> return ()
                Just gTy -> do focus qTy
                               elabE (ina { e_qq = True }) fc gTy
 
@@ -1078,8 +1099,8 @@ elab ist info emode opts fn tm
                Just q -> do ctxt <- get_context
                             (q', qt', _) <- lift $ recheck ctxt [(uq, Lam Erased) | uq <- unquoteNames] (forget q) q
                             case quotationGoal of
-                              Nothing -> lift . tfail . Msg $
-                                           "Broken elaboration of quasiquote - unknown goal type"
+                              Nothing ->
+                                lift . tfail $ CantQuoteInto normFinalTy
                               Just RawGoal
                                 | pattern -> reflectRawQuotePattern unquoteNames (forget q')
                                 | otherwise ->
@@ -1094,7 +1115,6 @@ elab ist info emode opts fn tm
                               Just (TypedGoal a)
                                 | pattern -> lift . tfail . Msg $ "No typed qq patterns yet"
                                 | otherwise ->
-                                  -- TODO: conversion check of a and qt' for better error message
                                   do let unTy = \x ->
                                           let ty = fmap binderVal $
                                                    lookup (SN (MetaN x (sUN "type"))) env
