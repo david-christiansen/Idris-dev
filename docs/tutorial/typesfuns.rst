@@ -38,7 +38,7 @@ collection of declarations and definitions. In this example no imports
 have been specified. However Idris programs can consist of several
 modules and the definitions in each module each have their own
 namespace. This is discussed further in Section
-:ref:`sect-namespaces`). When writing Idris programs both the order in
+:ref:`sect-namespaces`). When writing Idris programs both the order in which
 definitions are given and indentation are significant. Functions and
 data types must be defined before use, incidently each definition must
 have a type declaration, for example see ``x : Int``, ``foo :
@@ -973,8 +973,8 @@ Dependent Records
 
 *Records* are data types which collect several values (the record's
 *fields*) together. Idris provides syntax for defining records and
-*automatically generating field access and update functions. For
-*example, we can represent a person's name and age in a record:
+*automatically generating field access and update functions*. For
+example, we can represent a person's name and age in a record:
 
 .. code-block:: idris
 
