@@ -1112,3 +1112,24 @@ reflectDatatype (RDatatype tyn tyConArgs tyConRes constrs) =
           raw_apply (Var $ tacN "Parameter") [reflectName n, reflectErasure e, reflectRaw t]
         reflectConArg (RIndex n e t) =
           raw_apply (Var $ tacN "Index")     [reflectName n, reflectErasure e, reflectRaw t]
+
+-- | Reflect a high-level term
+reflectPTerm :: [Name] -> PTerm -> Raw
+reflectPTerm qns (PRef _ _ n) | n `elem` qns = Var n
+                          | otherwise    = RApp (Var $ reflm "PRef") (reflectName n)
+reflectPTerm qns (PLam _ n _ ty body) = raw_apply (Var $ reflm "PLam") [reflectName n, reflectPTerm qns ty, reflectPTerm qns body]
+reflectPTerm qns (PApp _ f args) = raw_apply (Var $ reflm "PApp")
+                                         [ rawList (Var $ reflm "PTerm") (map (reflectPTerm qns . getTm) args) ]
+reflectPTerm qns (PLet _ n _ ty val body) =
+  raw_apply (Var $ reflm "PLet") [reflectName n, reflectPTerm qns ty, reflectPTerm qns val, reflectPTerm qns body]
+reflectPTerm qns (PTyped tm ty) =
+  raw_apply (Var $ reflm "PTyped") [reflectPTerm qns tm, reflectPTerm qns ty]
+reflectPTerm qns (PType _) = Var (reflm "PType")
+reflectPTerm qns (PUniverse u) = RApp (Var $ reflm "PUniverse") (reflectUniverse u)
+reflectPTerm qns (PPi _ n _ ty body) =
+  raw_apply (Var $ reflm "PPi") [reflectName n, reflectPTerm qns ty, reflectPTerm qns body]
+reflectPTerm qns (PPair _ _ _ a b) =
+  raw_apply (Var $ reflm "PPair") [reflectPTerm qns a, reflectPTerm qns b]
+reflectPTerm qns (PTrue _ _) = Var (reflm "PTrue")
+reflectPTerm qns (PConstant _ c) = RApp (Var $ reflm "PConstant") (reflectConstant c)
+reflectPTerm qns tm = RApp (Var $ reflm "PDidntReflect") (RConstant $ Str (show tm))
