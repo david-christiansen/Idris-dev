@@ -1104,84 +1104,95 @@ elab ist info emode opts fn tm
              let unquoteNames = map fst unq
              mapM_ (\uqn -> claim uqn (forget finalTy)) unquoteNames
 
-             -- Save the old state - we need a fresh proof state to avoid
-             -- capturing lexically available variables in the quoted term.
-             ctxt <- get_context
-             datatypes <- get_datatypes
-             saveState
-             updatePS (const .
-                       newProof (sMN 0 "q") ctxt datatypes $
-                       P Ref (reflm "TT") Erased)
+             isPTerm <- tyIsPTerm finalTy
+             if isPTerm
+                then do fill (reflectPTerm (map fst unq) t)
+                        solve
+                        mapM_ elabUnquote unq
+                else do -- Save the old state - we need a fresh proof state to avoid
+                        -- capturing lexically available variables in the quoted term.
+                        ctxt <- get_context
+                        datatypes <- get_datatypes
+                        saveState
+                        updatePS (const .
+                                  newProof (sMN 0 "q") ctxt datatypes $
+                                  P Ref (reflm "TT") Erased)
 
-             -- Re-add the unquotes, letting Idris infer the (fictional)
-             -- types. Here, they represent the real type rather than the type
-             -- of their reflection.
-             mapM_ (\n -> do ty <- getNameFrom (sMN 0 "unqTy")
-                             claim ty RType
-                             movelast ty
-                             claim n (Var ty)
-                             movelast n)
-                   unquoteNames
+                        -- Re-add the unquotes, letting Idris infer the (fictional)
+                        -- types. Here, they represent the real type rather than the type
+                        -- of their reflection.
+                        mapM_ (\n -> do ty <- getNameFrom (sMN 0 "unqTy")
+                                        claim ty RType
+                                        movelast ty
+                                        claim n (Var ty)
+                                        movelast n)
+                              unquoteNames
 
-             -- Determine whether there's an explicit goal type, and act accordingly
-             -- Establish holes for the type and value of the term to be
-             -- quasiquoted
-             qTy <- getNameFrom (sMN 0 "qquoteTy")
-             claim qTy RType
-             movelast qTy
-             qTm <- getNameFrom (sMN 0 "qquoteTm")
-             claim qTm (Var qTy)
+                        -- Determine whether there's an explicit goal type, and act accordingly
+                        -- Establish holes for the type and value of the term to be
+                        -- quasiquoted
+                        qTy <- getNameFrom (sMN 0 "qquoteTy")
+                        claim qTy RType
+                        movelast qTy
+                        qTm <- getNameFrom (sMN 0 "qquoteTm")
+                        claim qTm (Var qTy)
 
-             -- Let-bind the result of elaborating the contained term, so that
-             -- the hole doesn't disappear
-             nTm <- getNameFrom (sMN 0 "quotedTerm")
-             letbind nTm (Var qTy) (Var qTm)
+                        -- Let-bind the result of elaborating the contained term, so that
+                        -- the hole doesn't disappear
+                        nTm <- getNameFrom (sMN 0 "quotedTerm")
+                        letbind nTm (Var qTy) (Var qTm)
 
-             -- Fill out the goal type, if relevant
-             case goalt of
-               Nothing  -> return ()
-               Just gTy -> do focus qTy
-                              elabE (ina { e_qq = True }) fc gTy
+                        -- Fill out the goal type, if relevant
+                        case goalt of
+                          Nothing  -> return ()
+                          Just gTy -> do focus qTy
+                                         elabE (ina { e_qq = True }) fc gTy
 
-             -- Elaborate the quasiquoted term into the hole
-             focus qTm
-             elabE (ina { e_qq = True }) fc t
-             end_unify
+                        -- Elaborate the quasiquoted term into the hole
+                        focus qTm
+                        elabE (ina { e_qq = True }) fc t
+                        end_unify
 
-             -- We now have an elaborated term. Reflect it and solve the
-             -- original goal in the original proof state, preserving highlighting
-             env <- get_env
-             EState _ _ _ hs <- getAux
-             loadState
-             updateAux (\aux -> aux { highlighting = hs })
+                        -- We now have an elaborated term. Reflect it and solve the
+                        -- original goal in the original proof state, preserving highlighting
+                        env <- get_env
+                        EState _ _ _ hs <- getAux
+                        loadState
+                        updateAux (\aux -> aux { highlighting = hs })
 
-             let quoted = fmap (explicitNames . binderVal) $ lookup nTm env
-                 isRaw = case unApply (normaliseAll ctxt env finalTy) of
-                           (P _ n _, []) | n == reflm "Raw" -> True
-                           _ -> False
-             case quoted of
-               Just q -> do ctxt <- get_context
-                            (q', _, _) <- lift $ recheck ctxt [(uq, Lam Erased) | uq <- unquoteNames] (forget q) q
-                            if pattern
-                              then if isRaw
-                                      then reflectRawQuotePattern unquoteNames (forget q')
-                                      else reflectTTQuotePattern unquoteNames q'
-                              else do if isRaw
-                                        then -- we forget q' instead of using q to ensure rechecking
-                                             fill $ reflectRawQuote unquoteNames (forget q')
-                                        else fill $ reflectTTQuote unquoteNames q'
-                                      solve
+                        let quoted = fmap (explicitNames . binderVal) $ lookup nTm env
+                            isRaw = case unApply (normaliseAll ctxt env finalTy) of
+                                      (P _ n _, []) | n == reflm "Raw" -> True
+                                      _ -> False
+                        case quoted of
+                          Just q -> do ctxt <- get_context
+                                       (q', _, _) <- lift $ recheck ctxt [(uq, Lam Erased) | uq <- unquoteNames] (forget q) q
+                                       if pattern
+                                         then if isRaw
+                                                 then reflectRawQuotePattern unquoteNames (forget q')
+                                                 else reflectTTQuotePattern unquoteNames q'
+                                         else do if isRaw
+                                                   then -- we forget q' instead of using q to ensure rechecking
+                                                        fill $ reflectRawQuote unquoteNames (forget q')
+                                                   else fill $ reflectTTQuote unquoteNames q'
+                                                 solve
 
-               Nothing -> lift . tfail . Msg $ "Broken elaboration of quasiquote"
+                          Nothing -> lift . tfail . Msg $ "Broken elaboration of quasiquote"
 
-             -- Finally fill in the terms or patterns from the unquotes. This
-             -- happens last so that their holes still exist while elaborating
-             -- the main quotation.
-             mapM_ elabUnquote unq
+                        -- Finally fill in the terms or patterns from the unquotes. This
+                        -- happens last so that their holes still exist while elaborating
+                        -- the main quotation.
+                        mapM_ elabUnquote unq
       where elabUnquote (n, tm)
                 = do focus n
                      elabE (ina { e_qq = False }) fc tm
-
+            tyIsPTerm ty =
+              do ctxt <- get_context
+                 env <- get_env
+                 (ptermTy, _) <- lift $ check ctxt [] (Var $ reflm "PTerm")
+                 case converts ctxt env ty ptermTy of
+                   OK _ -> return True
+                   _    -> return False
 
     elab' ina fc (PUnquote t) = fail "Found unquote outside of quasiquote"
     elab' ina fc (PQuoteName n nfc) =

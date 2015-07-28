@@ -204,28 +204,30 @@ data Raw =
 
 ||| Parsed terms without source locations
 data PTerm =
-    ||| Reference to a variable
-    PRef TTName
-    ||| Lambda abstraction. Second FC is name span.
-  | PLam TTName PTerm PTerm
-    ||| Application, e.g. IO (), List Char, length x
-  | PApp PTerm PTerm
-    ||| Let binding
-  | PLet TTName PTerm PTerm -- why Haskell version has three PTerms?
-    ||| Term with explicit type
-  | PTyped PTerm PTerm
-    ||| 'Type' type
-  | PType
-    ||| Some universe
-  | PUniverse Universe
-    ||| Pi type, e.g. (n : t1) -> t2
-  | PPi TTName PTerm PTerm
-    ||| A pair (a, b)
-  | PPair PTerm PTerm
-    ||| Unit type
-  | PTrue
-    ||| Builtin types
-  | PConstant Const
+  ||| Reference to a variable
+  PRef TTName |
+  ||| Lambda abstraction.
+  PLam TTName PTerm PTerm |
+  ||| Application, e.g. IO (), List Char, length x
+  PApp PTerm (List PTerm) | -- TODO: bring over PArg or similar, to distinguish plicity etc
+  ||| Let binding
+  PLet TTName PTerm PTerm PTerm |
+  ||| Term with explicit type
+  PTyped PTerm PTerm |
+  ||| 'Type' type
+  PType |
+  ||| Some universe
+  PUniverse Universe |
+  ||| Pi type, e.g. (n : t1) -> t2
+  PPi TTName PTerm PTerm | -- TODO: plicity!
+  ||| A pair (a, b)
+  PPair PTerm PTerm |
+  ||| Unit type
+  PTrue |
+  ||| Builtin types
+  PConstant Const |
+  ||| Failure to reflect
+  PDidntReflect String
 
 data SourceLocation : Type where
   FileLoc : (filename : String) -> (start : (Int, Int)) -> (end : (Int, Int)) -> SourceLocation
