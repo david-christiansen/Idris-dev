@@ -111,7 +111,7 @@ parserCommands =
 
   , exprArgCmd ["patt"] Pattelab "(Debugging) Elaborate pattern expression"
   , exprArgCmd ["spec"] Spec "?"
-  , exprArgCmd ["hnf"] HNF "?"
+  , exprArgCmd ["whnf"] WHNF "(Debugging) Show weak head normal form of an expression"
   , exprArgCmd ["inline"] TestInline "?"
   , proofArgCmd ["cs", "casesplit"] CaseSplitAt 
       ":cs <line> <name> splits the pattern variable on the line"
@@ -257,6 +257,7 @@ optArg cmd name = do
               <|> do discard (P.symbol "autosolve"); return AutoSolve
               <|> do discard (P.symbol "nobanner") ; return NoBanner
               <|> do discard (P.symbol "warnreach"); return WarnReach
+              <|> do discard (P.symbol "evaltypes"); return EvalTypes
 
 proofArg :: (Bool -> Int -> Name -> Command) -> String -> P.IdrisParser (Either String Command)
 proofArg cmd name = do
@@ -309,14 +310,14 @@ cmd_execute name = do
 
 cmd_dynamic :: String -> P.IdrisParser (Either String Command)
 cmd_dynamic name = do
-    let emptyArgs = noArgs ListDynamic name
-
-    let oneArg = do l <- many anyChar
-                    return $ Right (DynamicLink l)
+    let optArg = do l <- many anyChar
+                    if (l /= "")
+                        then return $ Right (DynamicLink l)
+                        else return $ Right ListDynamic
 
     let failure = return $ Left $ "Usage is :" ++ name ++ " [<library>]"
 
-    try emptyArgs <|> try oneArg <|> failure
+    try optArg <|> failure
 
 cmd_pprint :: String -> P.IdrisParser (Either String Command)
 cmd_pprint name = do

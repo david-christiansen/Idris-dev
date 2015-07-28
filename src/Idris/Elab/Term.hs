@@ -901,7 +901,7 @@ elab ist info emode opts fn tm
                 case lookup n env of
                      Nothing -> return ()
                      Just b ->
-                       case unApply (binderTy b) of
+                       case unApply (normalise (tt_ctxt ist) env (binderTy b)) of
                             (P _ c _, args) ->
                                 case lookupCtxtExact c (idris_classes ist) of
                                    Nothing -> return ()
@@ -1818,12 +1818,12 @@ collectDeferred top casenames ctxt (Bind n (GHole i t) app) =
     tidy ctxt env t | (f, args) <- unApply t,
                       P _ specn _ <- getFn f,
                       n `notElem` casenames
-        = fst $ specialise ctxt env [(specn, 99999)] t 
+        = normalise ctxt env t
     tidy ctxt env t@(Bind n (Let _ _) sct)
                     | (f, args) <- unApply sct,
                       P _ specn _ <- getFn f,
                       n `notElem` casenames
-        = fst $ specialise ctxt env [(specn, 99999)] t 
+        = normalise ctxt env t
     tidy ctxt env t = t
 
     getFn (Bind n (Lam _) t) = getFn t
