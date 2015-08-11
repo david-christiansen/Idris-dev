@@ -1119,7 +1119,9 @@ reflectPTerm qns (PRef _ _ n) | n `elem` qns = Var n
                           | otherwise    = RApp (Var $ reflm "PRef") (reflectName n)
 reflectPTerm qns (PLam _ n _ ty body) = raw_apply (Var $ reflm "PLam") [reflectName n, reflectPTerm qns ty, reflectPTerm qns body]
 reflectPTerm qns (PApp _ f args) = raw_apply (Var $ reflm "PApp")
-                                         [ rawList (Var $ reflm "PTerm") (map (reflectPTerm qns . getTm) args) ]
+                                         [ reflectPTerm qns f
+                                         , rawList (Var $ reflm "PTerm") (map (reflectPTerm qns . getTm) args)
+                                         ]
 reflectPTerm qns (PLet _ n _ ty val body) =
   raw_apply (Var $ reflm "PLet") [reflectName n, reflectPTerm qns ty, reflectPTerm qns val, reflectPTerm qns body]
 reflectPTerm qns (PTyped tm ty) =
