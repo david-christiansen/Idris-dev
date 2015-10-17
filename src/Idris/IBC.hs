@@ -40,7 +40,7 @@ import System.Directory
 import Codec.Archive.Zip
 
 ibcVersion :: Word16
-ibcVersion = 122
+ibcVersion = 123
 
 data IBCFile = IBCFile { ver :: Word16,
                          sourcefile :: FilePath,
@@ -1683,9 +1683,10 @@ instance Binary PTerm where
                                               put x2
                                               put x3
                                               put x4
-                PConstSugar x1 x2 -> do putWord8 46
-                                        put x1
-                                        put x2
+                PConstSugar x1 x2 x3 -> do putWord8 46
+                                           put x1
+                                           put x2
+                                           put x3
 
         get
           = do i <- getWord8
@@ -1832,7 +1833,8 @@ instance Binary PTerm where
                             return (PIfThenElse x1 x2 x3 x4)
                    46 -> do x1 <- get
                             x2 <- get
-                            return (PConstSugar x1 x2)
+                            x3 <- get
+                            return (PConstSugar x1 x2 x3)
                    _ -> error "Corrupted binary data for PTerm"
 
 instance Binary PAltType where

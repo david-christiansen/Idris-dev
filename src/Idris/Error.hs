@@ -57,6 +57,7 @@ setAndReport e = do ist <- getIState
                       _ -> do setErrSpan (getErrSpan e)
                               iWarn emptyFC $ pprintErr ist e
   where unwrap (ProofSearchFail e) = e -- remove bookkeeping constructor
+        unwrap (ConstSugarErr _ _ e) = e
         unwrap e = e
 
 ifail :: String -> Idris a
@@ -151,4 +152,4 @@ warnDisamb ist (PQuoteName _ _ _) = return ()
 warnDisamb ist (PAs _ _ tm) = warnDisamb ist tm
 warnDisamb ist (PAppImpl tm _) = warnDisamb ist tm
 warnDisamb ist (PRunElab _ tm _) = warnDisamb ist tm
-warnDisamb ist (PConstSugar _ tm) = warnDisamb ist tm
+warnDisamb ist (PConstSugar _ _ tm) = warnDisamb ist tm

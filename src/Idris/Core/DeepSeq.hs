@@ -155,6 +155,7 @@ instance NFData Err where
         rnf (ElabScriptStuck x1) = rnf x1 `seq` ()
         rnf (RunningElabScript x1) = rnf x1 `seq` ()
         rnf (ElabScriptStaging x1) = rnf x1 `seq` ()
+        rnf (ConstSugarErr x1 x2 x3) = rnf x1 `seq` rnf x2 `seq` rnf x3 `seq` ()
 
 instance NFData ErrorReportPart where
   rnf (TextPart x1) = rnf x1 `seq` ()

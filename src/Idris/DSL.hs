@@ -113,7 +113,7 @@ expandSugar dsl (PDoBlock ds)
 
 expandSugar dsl (PIdiom fc e) = expandSugar dsl $ unIdiom (dsl_apply dsl) (dsl_pure dsl) fc e
 expandSugar dsl (PRunElab fc tm ns) = PRunElab fc (expandSugar dsl tm) ns
-expandSugar dsl (PConstSugar fc tm) = PConstSugar fc (expandSugar dsl tm)
+expandSugar dsl (PConstSugar what fc tm) = PConstSugar what fc (expandSugar dsl tm)
 expandSugar dsl t = t
 
 -- | Replace DSL-bound variable in a term
@@ -200,7 +200,7 @@ debind b tm = let (tm', (bs, _)) = runState (db' tm) ([], 0) in
                                      r' <- db' r
                                      return (PDPair fc hls p l' t r')
     db' (PRunElab fc t ns) = fmap (\tm -> PRunElab fc tm ns) (db' t)
-    db' (PConstSugar fc tm) = liftM (PConstSugar fc) (db' tm)
+    db' (PConstSugar what fc tm) = liftM (PConstSugar what fc) (db' tm)
     db' t = return t
 
     dbArg a = do t' <- db' (getTm a)

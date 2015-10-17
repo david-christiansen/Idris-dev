@@ -507,6 +507,9 @@ pprintErr' i (ElabScriptStaging n) =
   text "Can't run elaboration script because it contains pattern matching that has not yet been elaborated." <$>
   text "Try lifting the script to a top-level definition." <$>
   text "In particular, the problem is caused by:" <+> annName n
+pprintErr' i (ConstSugarErr what fc e) =
+  text ("When checking the desugared constant `" ++ what ++ "'") <+>
+  text "from" <+> annotate (AnnFC fc) (text (show fc)) <> colon <> indented (pprintErr' i e)
 
 showPart :: IState -> ErrorReportPart -> Doc OutputAnnotation
 showPart ist (TextPart str) = fillSep . map text . words $ str

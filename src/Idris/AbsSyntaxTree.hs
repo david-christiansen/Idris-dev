@@ -980,7 +980,7 @@ data PTerm = PQuote Raw -- ^ Inclusion of a core term into the high-level langua
            | PUnquote PTerm -- ^ ~Term
            | PQuoteName Name Bool FC -- ^ `{n} where the FC is the precise highlighting for the name in particular. If the Bool is False, then it's `{{n}} and the name won't be resolved.
            | PRunElab FC PTerm [String] -- ^ %runElab tm - New-style proof script. Args are location, script, enclosing namespace.
-           | PConstSugar FC PTerm -- ^ A desugared constant. The FC is a precise source location that will be used to highlight it later.
+           | PConstSugar String FC PTerm -- ^ A desugared constant. The string is how to show the literal in error messages and the FC is a precise source location that will be used to highlight it later.
        deriving (Eq, Data, Typeable)
 
 data PAltType = ExactlyOne Bool -- ^ flag sets whether delay is allowed
@@ -1040,7 +1040,7 @@ mapPTermFC f g (PNoImplicits t) = PNoImplicits (mapPTermFC f g t)
 mapPTermFC f g (PQuasiquote t1 t2) = PQuasiquote (mapPTermFC f g t1) (fmap (mapPTermFC f g) t2)
 mapPTermFC f g (PUnquote t) = PUnquote (mapPTermFC f g t)
 mapPTermFC f g (PRunElab fc tm ns) = PRunElab (f fc) (mapPTermFC f g tm) ns
-mapPTermFC f g (PConstSugar fc tm) = PConstSugar (g fc) (mapPTermFC f g tm)
+mapPTermFC f g (PConstSugar what fc tm) = PConstSugar what (g fc) (mapPTermFC f g tm)
 mapPTermFC f g (PQuoteName n x fc) = PQuoteName n x (g fc)
 
 {-!
@@ -1270,7 +1270,7 @@ highestFC (PQuasiquote _ _) = Nothing
 highestFC (PUnquote tm) = highestFC tm
 highestFC (PQuoteName _ _ fc) = Just fc
 highestFC (PRunElab fc _ _) = Just fc
-highestFC (PConstSugar fc _) = Just fc
+highestFC (PConstSugar _ fc _) = Just fc
 highestFC (PAppImpl t _) = highestFC t
 
 -- Type class data
@@ -1886,7 +1886,7 @@ pprintPTerm ppo bnd docArgs infixes = prettySe (ppopt_depth ppo) startPrec bnd
       bracket p funcAppPrec . group . align . hang 2 $
       text "%runElab" <$>
       prettySe (decD d) funcAppPrec bnd tm
-    prettySe d p bnd (PConstSugar fc tm) = prettySe d p bnd tm -- should never occur, but harmless 
+    prettySe d p bnd (PConstSugar what fc tm) = prettySe d p bnd tm -- should never occur, but harmless
 
     prettySe d p bnd _ = text "missing pretty-printer for term"
 

@@ -833,6 +833,7 @@ try' t1 t2 proofSearch
         recoverableErr (ElaboratingArg _ _ _ e) = recoverableErr e
         recoverableErr (At _ e) = recoverableErr e
         recoverableErr (ElabScriptDebug _ _ _) = False
+        recoverableErr (ConstSugarErr _ _ e) = recoverableErr e
         recoverableErr _ = True
 
 tryCatch :: Elab' aux a -> (Err -> Elab' aux a) -> Elab' aux a

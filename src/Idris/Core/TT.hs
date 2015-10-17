@@ -294,6 +294,7 @@ data Err' t
           | ElabScriptStuck t
           | RunningElabScript (Err' t) -- ^ The error occurred during a top-level elaboration script
           | ElabScriptStaging Name
+          | ConstSugarErr String FC Err
   deriving (Eq, Functor, Data, Typeable)
 
 type Err = Err' Term
@@ -393,6 +394,7 @@ instance Show Err where
     show (CantResolveAlts _) = "CantResolveAlts"
     show (NoValidAlts _) = "NoValidAlts"
     show (IncompleteTerm _) = "IncompleteTerm"
+    show (ConstSugarErr _ _ e) = "ConstSugarErr(" ++ show e ++ ")"
     show _ = "Error"
 
 instance Pretty Err OutputAnnotation where

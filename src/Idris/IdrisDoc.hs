@@ -289,41 +289,41 @@ loadDocs ist n
 --   TODO: Remove unnecessary cases
 extractPTermNames :: PTerm  -- ^ Where to extract names from
                   -> [Name] -- ^ Extracted names
-extractPTermNames (PRef _ _ n)       = [n]
-extractPTermNames (PInferRef _ _ n)  = [n]
-extractPTermNames (PPatvar _ n)      = [n]
-extractPTermNames (PLam _ n _ p1 p2) = n : concatMap extract [p1, p2]
-extractPTermNames (PPi _ n _ p1 p2)  = n : concatMap extract [p1, p2]
+extractPTermNames (PRef _ _ n)          = [n]
+extractPTermNames (PInferRef _ _ n)     = [n]
+extractPTermNames (PPatvar _ n)         = [n]
+extractPTermNames (PLam _ n _ p1 p2)    = n : concatMap extract [p1, p2]
+extractPTermNames (PPi _ n _ p1 p2)     = n : concatMap extract [p1, p2]
 extractPTermNames (PLet _ n _ p1 p2 p3) = n : concatMap extract [p1, p2, p3]
-extractPTermNames (PTyped p1 p2)     = concatMap extract [p1, p2]
-extractPTermNames (PApp _ p pas)     = let names = concatMap extractPArg pas
-                                       in  (extract p) ++ names
-extractPTermNames (PAppBind _ p pas) = let names = concatMap extractPArg pas
-                                       in  (extract p) ++ names
-extractPTermNames (PMatchApp _ n)    = [n]
-extractPTermNames (PCase _ p ps)     = let (ps1, ps2) = unzip ps
-                                       in  concatMap extract (p:(ps1 ++ ps2))
+extractPTermNames (PTyped p1 p2)        = concatMap extract [p1, p2]
+extractPTermNames (PApp _ p pas)        = let names = concatMap extractPArg pas
+                                          in  (extract p) ++ names
+extractPTermNames (PAppBind _ p pas)    = let names = concatMap extractPArg pas
+                                          in  (extract p) ++ names
+extractPTermNames (PMatchApp _ n)       = [n]
+extractPTermNames (PCase _ p ps)        = let (ps1, ps2) = unzip ps
+                                          in  concatMap extract (p:(ps1 ++ ps2))
 extractPTermNames (PIfThenElse _ c t f) = concatMap extract [c, t, f]
-extractPTermNames (PRewrite _ a b m) | Just c <- m =
-                                       concatMap extract [a, b, c]
-extractPTermNames (PRewrite _ a b _) = concatMap extract [a, b]
-extractPTermNames (PPair _ _ _ p1 p2)  = concatMap extract [p1, p2]
-extractPTermNames (PDPair _ _ _ a b c) = concatMap extract [a, b, c]
-extractPTermNames (PAlternative _ _ l) = concatMap extract l
-extractPTermNames (PHidden p)        = extract p
-extractPTermNames (PGoal _ p1 n p2)  = n : concatMap extract [p1, p2]
-extractPTermNames (PDoBlock pdos)    = concatMap extractPDo pdos
-extractPTermNames (PIdiom _ p)       = extract p
-extractPTermNames (PMetavar _ n)     = [n]
-extractPTermNames (PProof tacts)     = concatMap extractPTactic tacts
-extractPTermNames (PTactics tacts)   = concatMap extractPTactic tacts
-extractPTermNames (PCoerced p)       = extract p
-extractPTermNames (PDisamb _ p)      = extract p
-extractPTermNames (PUnifyLog p)      = extract p
-extractPTermNames (PNoImplicits p)   = extract p
-extractPTermNames (PRunElab _ p _)   = extract p
-extractPTermNames (PConstSugar _ tm) = extract tm
-extractPTermNames _                  = []
+extractPTermNames (PRewrite _ a b m)
+  | Just c <- m = concatMap extract [a, b, c]
+  | otherwise   = concatMap extract [a, b]
+extractPTermNames (PPair _ _ _ p1 p2)   = concatMap extract [p1, p2]
+extractPTermNames (PDPair _ _ _ a b c)  = concatMap extract [a, b, c]
+extractPTermNames (PAlternative _ _ l)  = concatMap extract l
+extractPTermNames (PHidden p)           = extract p
+extractPTermNames (PGoal _ p1 n p2)     = n : concatMap extract [p1, p2]
+extractPTermNames (PDoBlock pdos)       = concatMap extractPDo pdos
+extractPTermNames (PIdiom _ p)          = extract p
+extractPTermNames (PMetavar _ n)        = [n]
+extractPTermNames (PProof tacts)        = concatMap extractPTactic tacts
+extractPTermNames (PTactics tacts)      = concatMap extractPTactic tacts
+extractPTermNames (PCoerced p)          = extract p
+extractPTermNames (PDisamb _ p)         = extract p
+extractPTermNames (PUnifyLog p)         = extract p
+extractPTermNames (PNoImplicits p)      = extract p
+extractPTermNames (PRunElab _ p _)      = extract p
+extractPTermNames (PConstSugar _ _ tm)  = extract tm
+extractPTermNames _                     = []
 
 -- | Shorter name for extractPTermNames
 extract :: PTerm  -- ^ Where to extract names from

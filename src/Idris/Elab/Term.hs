@@ -532,6 +532,7 @@ elab ist info emode opts fn tm
         recoverableErr (ElaboratingArg _ _ _ e) = recoverableErr e
         recoverableErr (At _ e) = recoverableErr e
         recoverableErr (ElabScriptDebug _ _ _) = False
+        recoverableErr (ConstSugarErr _ _ e) = recoverableErr e
         recoverableErr _ = True
 
         pruneAlts (CantUnify _ (inc, _) (outc, _) _ _ _) alts env
@@ -565,6 +566,7 @@ elab ist info emode opts fn tm
         showQuick (ElaboratingArg _ _ _ e) = showQuick e
         showQuick (At _ e) = showQuick e
         showQuick (ProofSearchFail (Msg _)) = "search fail"
+        showQuick (ConstSugarErr _ _ e) = showQuick e
         showQuick _ = "No chance"
 
     elab' ina _ (PPatvar fc n) | bindfree
@@ -1251,7 +1253,7 @@ elab ist info emode opts fn tm
          env <- get_env
          runElabAction ist (maybe fc' id fc) env script ns
          solve
-    elab' ina fc (PConstSugar constFC tm) =
+    elab' ina fc (PConstSugar what constFC tm) =
       -- Here we elaborate the contained term, then calculate
       -- highlighting for constFC.  The highlighting is the
       -- highlighting for the outermost constructor of the result of
@@ -1276,7 +1278,8 @@ elab ist info emode opts fn tm
          let v = fmap (normaliseAll ctxt env . finalise . binderVal)
                       (lookup n env)
          loadState -- we have the highlighting - re-elaborate the value
-         elab' ina fc tm
+         transformErr (ConstSugarErr what constFC) $
+           elab' ina fc tm
          case v of
            Just val -> highlightConst constFC val
            Nothing -> return ()
@@ -2360,6 +2363,7 @@ elaboratingArgErr ((f,x):during) err = fromMaybe err (rewrite err)
   where rewrite (ElaboratingArg _ _ _ _) = Nothing
         rewrite (ProofSearchFail e) = fmap ProofSearchFail (rewrite e)
         rewrite (At fc e) = fmap (At fc) (rewrite e)
+        rewrite (ConstSugarErr what fc e) = fmap (ConstSugarErr what fc) (rewrite e)
         rewrite err = Just (ElaboratingArg f x during err)
 
 
@@ -2383,6 +2387,9 @@ withErrorReflection x = idrisCatch x (\ e -> handle e >>= ierror)
                                                                  then handle err
                                                                  else applyHandlers err hs
                                                       return (ElaboratingArg f a prev err')
+          handle e@(ConstSugarErr what fc err) = do logLvl 3 "Reflecting body of ConstSugarErr"
+                                                    err' <- handle err
+                                                    return (ConstSugarErr what fc err')
           -- ProofSearchFail is an internal detail - so don't expose it
           handle (ProofSearchFail e) = handle e
           -- TODO: argument-specific error handlers go here for ElaboratingArg

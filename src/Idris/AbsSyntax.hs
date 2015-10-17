@@ -1070,7 +1070,7 @@ expandParams dec ps ns infs tm = en 0 tm
     en 0 (PCase fc c os) = PCase fc (en 0 c) (map (pmap (en 0)) os)
     en 0 (PIfThenElse fc c t f) = PIfThenElse fc (en 0 c) (en 0 t) (en 0 f)
     en 0 (PRunElab fc tm ns) = PRunElab fc (en 0 tm) ns
-    en 0 (PConstSugar fc tm) = PConstSugar fc (en 0 tm)
+    en 0 (PConstSugar what fc tm) = PConstSugar what fc (en 0 tm)
 
     en ql (PQuasiquote tm ty) = PQuasiquote (en (ql + 1) tm) (fmap (en ql) ty)
     en ql (PUnquote tm) = PUnquote (en (ql - 1) tm)
@@ -1542,7 +1542,7 @@ implicitise syn ignore ist tm = -- trace ("INCOMING " ++ showImp True tm) $
     imps top env (PUnifyLog tm)  = imps False env tm
     imps top env (PNoImplicits tm)  = imps False env tm
     imps top env (PRunElab fc tm ns) = imps False env tm
-    imps top env (PConstSugar fc tm) = imps top env tm -- ignore PConstSugar - it's for highlighting only!
+    imps top env (PConstSugar what fc tm) = imps top env tm -- ignore PConstSugar - it's for highlighting and error rporting only!
     imps top env _               = return ()
 
     pibind using []     sc = sc
@@ -1676,7 +1676,7 @@ addImpl' inpat env infns imp_meths ist ptm
                                                   (fmap (ai inpat True env ds) g)
     ai inpat qq env ds (PUnquote tm) = PUnquote (ai inpat False env ds tm)
     ai inpat qq env ds (PRunElab fc tm ns) = PRunElab fc (ai inpat False env ds tm) ns
-    ai inpat qq env ds (PConstSugar fc tm) = PConstSugar fc (ai inpat qq env ds tm)
+    ai inpat qq env ds (PConstSugar what fc tm) = PConstSugar what fc (ai inpat qq env ds tm)
     ai inpat qq env ds tm = tm
 
     handleErr (Left err) = PElabError err
@@ -2116,7 +2116,7 @@ substMatchShadow n shs tm t = sm shs t where
     sm xs (PUnifyLog x) = PUnifyLog (sm xs x)
     sm xs (PNoImplicits x) = PNoImplicits (sm xs x)
     sm xs (PRunElab fc script ns) = PRunElab fc (sm xs script) ns
-    sm xs (PConstSugar fc tm) = PConstSugar fc (sm xs tm)
+    sm xs (PConstSugar what fc tm) = PConstSugar what fc (sm xs tm)
     sm xs x = x
 
     fullApp (PApp _ (PApp fc f args) xs) = fullApp (PApp fc f (args ++ xs))
@@ -2259,7 +2259,7 @@ mkUniqueNames env shadows tm
   mkUniq 0 nmap (PProof ts) = liftM PProof (mapM (mkUniqT 0 nmap) ts)
   mkUniq 0 nmap (PTactics ts) = liftM PTactics (mapM (mkUniqT 0 nmap) ts)
   mkUniq 0 nmap (PRunElab fc ts ns) = liftM (\tm -> PRunElab fc tm ns) (mkUniq 0 nmap ts)
-  mkUniq 0 nmap (PConstSugar fc tm) = liftM (PConstSugar fc) (mkUniq 0 nmap tm)
+  mkUniq 0 nmap (PConstSugar what fc tm) = liftM (PConstSugar what fc) (mkUniq 0 nmap tm)
   mkUniq 0 nmap (PCoerced tm) = liftM PCoerced (mkUniq 0 nmap tm)
   mkUniq 0 nmap t = return $ shadowAll (M.toList nmap) t
     where

@@ -229,7 +229,7 @@ updateSynMatch = update
     update ns (PQuoteName n res fc) = let (n', fc') = (updateB ns (n, fc))
                                       in PQuoteName n' res fc'
     update ns (PRunElab fc t nsp) = PRunElab fc (update ns t) nsp
-    update ns (PConstSugar fc t) = PConstSugar fc $ update ns t
+    update ns (PConstSugar what fc t) = PConstSugar what fc $ update ns t
     -- PConstSugar probably can't contain anything substitutable, but it's hard to track
     update ns t = t
 
@@ -517,11 +517,11 @@ bracketedExpr syn openParenFC e =
 modifyConst :: SyntaxInfo -> FC -> PTerm -> PTerm
 modifyConst syn fc (PConstant inFC (BI x))
     | not (inPattern syn)
-        = PConstSugar inFC $ -- wrap in original location for highlighting
+        = PConstSugar (show x) inFC $ -- wrap in original location for highlighting
             PAlternative [] FirstSuccess
               (PApp fc (PRef fc [] (sUN "fromInteger")) [pexp (PConstant NoFC (BI (fromInteger x)))]
               : consts)
-    | otherwise = PConstSugar inFC $
+    | otherwise = PConstSugar (show x) inFC $
                     PAlternative [] FirstSuccess consts
     where
       consts = [ PConstant inFC (BI x)
